@@ -1,0 +1,4 @@
+# narzędzia deweloperskie (VS Code: zadanie "Zależności: zainstaluj (dev)")
+pytest>=8
+ruff>=0.6
+pyinstaller>=6.10

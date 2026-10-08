@@ -1,0 +1,26 @@
+[project]
+name = "roots-soundsystem"
+version = "0.1.0"
+description = "Cyfrowy tor soundsystemu roots and culture (Windows 11, PySide6)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle, isort, bugbear, pyupgrade, numpy
+select = ["F", "E", "W", "I", "B", "UP", "NPY"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dsp", "engine", "presets", "ui"]
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "cr-lf"

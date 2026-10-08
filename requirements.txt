@@ -1,0 +1,15 @@
+PySide6>=6.6
+sounddevice>=0.4.6
+numpy>=1.26
+scipy>=1.11
+pyqtgraph>=0.13
+soundfile>=0.12
+
+# opcjonalne
+numba>=0.60            # płynny sweep filtrów preampu (SVF próbka po próbce)
+mido>=1.3              # sterowanie MIDI
+pygame-ce>=2.5         # backend MIDI dla mido (gdy brak kół python-rtmidi, np. Python 3.14)
+# python-rtmidi>=1.5   # alternatywny backend MIDI
+
+# testy
+pytest>=8
