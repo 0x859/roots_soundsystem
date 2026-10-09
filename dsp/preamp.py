@@ -8,7 +8,7 @@ from scipy import signal
 from engine.params import ParamSpec
 
 from .biquad import SOSFilter, high_shelf, highpass1, low_shelf, response
-from .common import Ramp, db2lin
+from .common import Ramp, Switch, crossfade, db2lin
 from .svf import SweepFilter
 
 BASS_HZ = 100.0
@@ -38,6 +38,10 @@ class Oversampler2x:
         self.h = signal.firwin(taps, 0.5)
         self._zi_up = np.zeros((taps - 1, channels))
         self._zi_dn = np.zeros((taps - 1, channels))
+
+    def reset(self) -> None:
+        self._zi_up[:] = 0.0
+        self._zi_dn[:] = 0.0
 
     def up(self, x: np.ndarray) -> np.ndarray:
         u = np.zeros((2 * len(x), x.shape[1]))
@@ -74,6 +78,15 @@ class Preamp:
         self.hp = SweepFilter("hp", fs, channels)
         self.lp = SweepFilter("lp", fs, channels)
         self._tone_sos = self.tone.sos
+        self.switch = Switch(fs, on_silent=self.reset)
+
+    def reset(self) -> None:
+        self.oversampler.reset()
+        self.tone.reset()
+        self.hp.reset()
+        self.lp.reset()
+        self.gain.snap()
+        self.master.snap()
 
     def warmup(self) -> None:
         self.hp.warmup()
@@ -81,6 +94,7 @@ class Preamp:
 
     def configure(self, p) -> None:
         self.enabled = bool(p["preamp.enabled"])
+        self.switch.set(self.enabled)
         self.gain.set(db2lin(p["preamp.gain"]))
         self.master.set(db2lin(p["preamp.master"]))
         self.drive = float(p["preamp.drive"])
@@ -100,9 +114,13 @@ class Preamp:
         self.lp.set(float(p["preamp.lp"]), res)
 
     def process(self, x: np.ndarray) -> np.ndarray:
-        if not self.enabled:
-            return x
         n = len(x)
+        g = self.switch.block(n)
+        if g is None:
+            return x
+        return crossfade(x, self._process(x, n), g)
+
+    def _process(self, x: np.ndarray, n: int) -> np.ndarray:
         y = x * self.gain.block(n)
         u = self.oversampler.up(y)
         if self.drive > 0.001:

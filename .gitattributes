@@ -1,0 +1,9 @@
+# Kopia robocza zawsze z CRLF (wymóg projektu), w repozytorium LF.
+* text=auto eol=crlf
+
+*.ico binary
+*.png binary
+*.wav binary
+*.flac binary
+*.ttf binary
+*.otf binary

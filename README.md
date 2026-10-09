@@ -1,5 +1,12 @@
 # Roots Soundsystem
 
+![Ekran LIVE](docs/img/live.png)
+
+> **English:** a digital roots & culture sound system for Windows 11 – tube-style preamp with sweep filters,
+> tape echo, spring reverb, dub siren, MC microphone with talkover, 5-band kill isolator, active crossover,
+> speaker-stack and room simulation for headphones or true multi-way output on a multichannel interface,
+> fully customisable QML desk and Akai MIDImix support. The UI and docs are in Polish. MIT licensed.
+
 Cyfrowe odtworzenie toru soundsystemu roots and culture na Windows 11: przedwzmacniacz z nasyceniem lampowym i filtrami sweep, echo taśmowe, reverb sprężynowy, syrena dubowa, mikrofon MC z talkoverem, 5-drożny izolator z kill, aktywna zwrotnica i dwa tryby wyjścia:
 
 - **Symulacja** – modele kolumn (scoopy, bass biny, mid horny, tweetery) i akustyka miejsca (splot z IR) na słuchawkach lub zwykłych głośnikach stereo,
@@ -15,7 +22,7 @@ Syrena ─────────────────┘     └─► send
 
 ## Instalacja
 
-1. Python 3.11+ (testowane na 3.14).
+1. Windows 10/11 i Python 3.11+ (testowane na 3.14).
 2. W katalogu projektu:
 
    ```powershell
@@ -77,8 +84,8 @@ Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = t
 - **Czysty tor przy starcie**: domyślnie aplikacja startuje z wyłączonymi wszystkimi modułami DSP (preamp, mikrofon, echo, sprężyna, EQ, izolator, modele kolumn, miejsce) – muzyka przechodzi bez zmian, zostają tylko zwrotnica, ochrona (subsonic, limitery) i master. Ustawienia gałek są zapamiętane. Przycisk **DSP n/8** w nagłówku wyłącza wszystko albo przywraca poprzedni zestaw modułów (także akcja `action:dsp_toggle` dla skrótu/MIDI). Zmiana: karta Urządzenia → „Przy starcie aplikacji: CZYSTY TOR / OSTATNI STAN” albo menu Audio.
 - Kliknięcie tytułu karty zwija ją do samego nagłówka (stan jest zapamiętywany).
 - Przy kontrolerze MIDI z przejęciem wartości (pickup) niebieski znacznik na gałce/suwaku pokazuje położenie elementu kontrolera, dopóki nie „złapie” wartości.
-- Liczba kolumn kart zależy od szerokości okna – w wąskim oknie karty układają się jedna pod drugą zamiast się zmniejszać.
-- Karta z przełącznikiem **ON/OFF** w nagłówku włącza moduł; **WIĘCEJ · n** rozwija rzadziej używane kontrolki.
+- Układ dopasowuje się do okna: liczba kolumn wynika z szerokości, a rzędy są wyrównywane tak, żeby karty wypełniały całą szerokość (bez dziur i samotnych kart). Skala interfejsu rośnie na dużych ekranach i maleje na małych (×0,9–1,3, wyłączane w MOTYW).
+- Karta z przełącznikiem **ON/OFF** w nagłówku włącza moduł (z krótkim przenikaniem, bez trzasków; po ponownym włączeniu moduł startuje od czystego stanu, bez resztek echa czy pogłosu sprzed wyłączenia). **WIĘCEJ · n** rozwija rzadziej używane kontrolki – gdy na ekranie jest miejsce, karty robią to same (najpierw te, które dokładają najmniej wysokości), dopóki całość mieści się bez przewijania.
 - **✎ UKŁAD** – tryb edycji układu (wszystko można zmienić):
   - przeciągnij kartę za `⋮⋮` lub kontrolkę, aby zmienić kolejność (także między kartami); niebieska kreska pokazuje miejsce wstawienia, strefa na dole przenosi kartę na koniec;
   - przeciągnij prawą krawędź karty (szerokość 1–4 kolumn), dolną (dowolna wysokość w pikselach, dwuklik = automatyczna) albo złoty róg (oba naraz) – podgląd pokazuje nowy rozmiar; gdy karta jest niższa niż treść, wnętrze się przewija; prowadnice pokazują kolumny siatki;
@@ -89,7 +96,7 @@ Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = t
   - inspektor **KONTROLKA**: cel (parametr, akcja `action:*` albo widok `view:*`), typ (gałka, suwak, przycisk, pad, wartość), rozmiar S/M/L, etykieta, kolor, skrót klawiszowy (kliknij pole i naciśnij klawisz), przypisanie MIDI (learn);
   - **KARTA**: tytuł, szerokość 1–4 kolumn, wysokość (auto lub px, także `Shift+↑/↓`), rzędy siatki 1–3, liczba kontrolek w rzędzie, zwinięcie w LIVE, widoczność (LIVE/KONFIGURACJA/obie), zwijanie „Więcej”, kolor, przełącznik i informacja w nagłówku;
   - **PADY**: zawartość i kolejność paska padów, położenie (dół/góra/ukryty), wysokość;
-  - **MOTYW**: skala 80–160%, gęstość, styl gałek, ramki kontrolek w trybie gry, minimalna szerokość karty, kolory, czcionki;
+  - **MOTYW**: skala 80–160%, dopasowanie do okna (skala auto, samoczynne rozwijanie kart), gęstość, styl gałek, ramki kontrolek w trybie gry, minimalna szerokość karty, kolory, czcionki;
   - wyszukiwarka u dołu dodaje parametr do zaznaczonej karty (albo pad);
   - COFNIJ/PONÓW, profile układu (ZAPISZ JAKO, przełączanie, usuwanie), IMPORT/EKSPORT JSON, RESET do układu domyślnego.
 - Profile układu to pliki JSON w `%APPDATA%\RootsSoundsystem\layouts\` (zapis automatyczny).
@@ -123,6 +130,7 @@ Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = t
 | `ui/` | okno główne, stół klasyczny (panele, widżety, wykresy), profil układu `layout_profile.py` |
 | `ui/quick/` | nowy interfejs: most parametrów, model układu, motyw i sesja dla QML; pliki `qml/` |
 | `tests/` | testy jednostkowe, wydajności i GUI |
+| `docs/` | plan, decyzje i stan prac (`PLAN.md`), zrzuty ekranu |
 
 ## Testy i wydajność
 
@@ -147,3 +155,11 @@ Aplikacja nie hostuje wtyczek, ale można ich używać w DAW (np. do przygotowan
 - **Analiza**: Voxengo SPAN (analizator widma).
 
 Dostępność i licencje wtyczek należy sprawdzić na stronach producentów.
+
+## Współtworzenie
+
+Zgłoszenia i pull requesty są mile widziane – zasady w [CONTRIBUTING.md](CONTRIBUTING.md), architektura w [CLAUDE.md](CLAUDE.md), plan w [docs/PLAN.md](docs/PLAN.md), historia zmian w [CHANGELOG.md](CHANGELOG.md).
+
+## Licencja
+
+Kod: [MIT](LICENSE). Aplikacja korzysta z bibliotek na własnych licencjach, m.in. PySide6/Qt i pygame-ce (LGPL – łączone dynamicznie, paczka EXE zawiera je jako osobne biblioteki), numpy, scipy, numba (BSD), sounddevice/PortAudio, soundfile/libsndfile, mido, pyqtgraph (MIT/LGPL). Rozpowszechniając paczkę EXE, dołącz informacje o licencjach tych bibliotek. Czcionki z `assets/fonts/` (jeśli są) – SIL OFL.

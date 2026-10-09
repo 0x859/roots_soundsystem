@@ -1,4 +1,10 @@
 .venv/
+.ruff_cache/
+*.egg-info/
+selftest.json
+*.log
+.idea/
+.claude/settings.local.json
 __pycache__/
 .pytest_cache/
 *.pyc

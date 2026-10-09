@@ -7,7 +7,7 @@ import numpy as np
 from engine.params import ParamSpec
 
 from .biquad import SOSFilter, highpass, lowpass
-from .common import Ramp
+from .common import Ramp, Switch
 
 PARAMS = [
     ParamSpec("spring.enabled", "Sprężyna", True, kind="bool"),
@@ -53,14 +53,25 @@ class SpringReverb:
         self._burst_pos = 0
         self._rng = np.random.default_rng(seed)
         self.crash = False
+        self.switch = Switch(fs, on_silent=self.reset)
+
+    def reset(self) -> None:
+        self.buf.fill(0.0)
+        for f in (self.pre, self.loop, self.post):
+            f.reset()
+        self.phase[:] = 0.0
+        self._burst = None
+        self._crash_armed = False
+        self.ret.snap()
 
     def configure(self, p) -> None:
         self.enabled = bool(p["spring.enabled"])
+        self.switch.set(self.enabled)
         self.g = 0.3 + 0.62 * float(p["spring.decay"])
         self.ret.set(float(p["spring.return"]))
         self.loop.set_sos(np.vstack([lowpass(float(p["spring.tone"]), 0.707, self.fs)] + [stretched_allpass(0.5)] * 4))
         crash = bool(p["spring.crash"])
-        if crash and not self._crash_prev:
+        if crash and not self._crash_prev and self.enabled:  # CRASH przy wyłączonej sprężynie nie czeka
             self._crash_armed = True
         self._crash_prev = crash
 
@@ -73,9 +84,14 @@ class SpringReverb:
         return (noise + thump) * env[:, None]
 
     def process(self, x: np.ndarray) -> np.ndarray | None:
-        if not self.enabled:
-            return None
         n = len(x)
+        g = self.switch.block(n)
+        if g is None:
+            return None
+        y = self._process(x, n)
+        return y if isinstance(g, float) else y * g
+
+    def _process(self, x: np.ndarray, n: int) -> np.ndarray:
         if self._crash_armed:
             self._crash_armed = False
             self._burst = self._make_burst()

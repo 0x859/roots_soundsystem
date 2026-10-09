@@ -7,7 +7,7 @@ import numpy as np
 from engine.params import ParamSpec
 
 from .biquad import SOSFilter, bandpass, high_shelf, highpass, identity, lowpass, peaking, response
-from .common import DelayLine, Ramp
+from .common import DelayLine, Ramp, Switch, crossfade
 from .crossover import ALL_WAYS, WAY_LABELS
 
 # Każdy profil: lista (typ, parametry) przekładana na biquady dla danego fs.
@@ -83,9 +83,19 @@ class CabinetStack:
         self.bassfeel = BassFeel(fs)
         self.bassfeel_amt = Ramp(0.0, 30, fs)
         self.enabled = True
+        self.switch = Switch(fs, on_silent=self.reset)
+
+    def reset(self) -> None:
+        for f in self.filters.values():
+            f.reset()
+        self.sub_delay.reset()
+        self.bassfeel.reset()
+        self.width.snap()
+        self.bassfeel_amt.snap()
 
     def configure(self, p) -> None:
         self.enabled = bool(p["sim.enabled"])
+        self.switch.set(self.enabled)
         for w in ALL_WAYS:
             key = PROFILE_KEYS[int(p[f"sim.cab.{w}"])]
             if key != self.profile[w]:
@@ -98,12 +108,16 @@ class CabinetStack:
         self.bassfeel_amt.set(float(p["sim.bassfeel"]))
 
     def process(self, ways: dict[str, np.ndarray], n: int) -> np.ndarray:
-        if not self.enabled:
-            # bez modeli: zwykła suma dróg (LR4 sumuje się płasko), bez kompresji, szerokości i bass feel
-            out = np.zeros((n, self.channels))
-            for x in ways.values():
-                out += x
-            return out
+        # bez modeli: zwykła suma dróg (LR4 sumuje się płasko), bez kompresji, szerokości i bass feel
+        dry = np.zeros((n, self.channels))
+        for x in ways.values():
+            dry += x
+        g = self.switch.block(n)
+        if g is None:
+            return dry
+        return crossfade(dry, self._process(ways, n), g)
+
+    def _process(self, ways: dict[str, np.ndarray], n: int) -> np.ndarray:
         low = np.zeros((n, self.channels))
         high = np.zeros((n, self.channels))
         k = self.drive_k
@@ -143,6 +157,10 @@ class BassFeel:
         self.fs = fs
         self.pre = SOSFilter(np.vstack([lowpass(120, 0.707, fs), lowpass(120, 0.707, fs)]), 1)
         self.post = SOSFilter(np.vstack([bandpass(160, 0.9, fs), highpass(90, 0.707, fs), lowpass(450, 0.707, fs)]), 1)
+
+    def reset(self) -> None:
+        self.pre.reset()
+        self.post.reset()
 
     def process(self, low: np.ndarray) -> np.ndarray:
         m = self.pre.process(low.mean(axis=1, keepdims=True))

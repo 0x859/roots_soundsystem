@@ -37,6 +37,10 @@ class BandSplitter:
             ap.append(np.vstack(rows) if rows else None)
         return lp, hp, ap
 
+    def reset(self) -> None:
+        for f in (*self._lp, *self._hp, *self._ap):
+            f.reset()
+
     def set_freqs(self, freqs: list[float]) -> None:
         freqs = list(freqs)
         if len(freqs) != len(self.freqs):

@@ -7,7 +7,7 @@ import numpy as np
 from engine.params import ParamSpec
 
 from .biquad import SOSFilter, identity, peaking, response
-from .common import Ramp, db2lin
+from .common import Ramp, Switch, crossfade, db2lin
 
 BANDS = (25, 50, 100, 200, 400, 800, 1600, 3150, 6300, 10000, 12500, 16000)
 Q = 1.4
@@ -35,9 +35,15 @@ class Equalizer:
         self._sos = np.vstack([identity() for _ in BANDS])
         self.filter = SOSFilter(self._sos, channels)
         self.preamp = Ramp(1.0, 20, fs)
+        self.switch = Switch(fs, on_silent=self.reset)
+
+    def reset(self) -> None:
+        self.filter.reset()
+        self.preamp.snap()
 
     def configure(self, p) -> None:
         self.enabled = bool(p["eq.enabled"])
+        self.switch.set(self.enabled)
         self.preamp.set(db2lin(p["eq.preamp"]))
         sos = None
         for i, f in enumerate(BANDS):
@@ -56,9 +62,10 @@ class Equalizer:
         return self._sos
 
     def process(self, x: np.ndarray) -> np.ndarray:
-        if not self.enabled:
+        g = self.switch.block(len(x))
+        if g is None:
             return x
-        return self.filter.process(x) * self.preamp.block(len(x))
+        return crossfade(x, self.filter.process(x) * self.preamp.block(len(x)), g)
 
     def response(self, freqs: np.ndarray) -> np.ndarray:
         if not self.enabled:

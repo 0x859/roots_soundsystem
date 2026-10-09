@@ -67,6 +67,55 @@ class Ramp:
         return self._cur == 0.0 and self.target == 0.0
 
 
+SWITCH_MS = 15.0
+
+
+class Switch:
+    """Włącznik modułu: krótkie przenikanie (bez trzasków) i czysty stan po każdym ponownym włączeniu.
+
+    `set` woła wątek sterujący (configure), `block` – wątek audio. `block(n)` zwraca None, gdy moduł
+    jest wyłączony i już wyciszony (nie trzeba go liczyć), w przeciwnym razie wzmocnienie ścieżki
+    modułu: 1.0 albo tablicę (n, 1) w trakcie przenikania. Gdy wyłączony moduł się wyciszy, `block`
+    raz woła `on_silent` (reset stanu modułu) – w wątku audio, więc bez wyścigu z konfiguracją.
+    Bez tego wyłączony moduł zamrażał bufory i filtry, a po włączeniu odgrywał resztki sprzed minut.
+    """
+
+    def __init__(self, fs: float, on: bool = True, ms: float = SWITCH_MS, on_silent=None):
+        self.on = bool(on)
+        self.ramp = Ramp(1.0 if self.on else 0.0, ms, fs)
+        self.on_silent = on_silent
+        self._silent = not self.on
+        self._started = False
+
+    def set(self, on: bool) -> None:
+        self.on = bool(on)
+        if not self._started:  # konfiguracja przed pierwszym blokiem obowiązuje od razu, bez przenikania
+            self.ramp.snap(1.0 if self.on else 0.0)
+            self._silent = not self.on
+            return
+        self.ramp.set(1.0 if self.on else 0.0)
+
+    def block(self, n: int):
+        self._started = True
+        if self.on:
+            self._silent = False
+        elif self._silent:
+            return None
+        elif self.ramp.is_silent():
+            self._silent = True
+            if self.on_silent is not None:
+                self.on_silent()
+            return None
+        return self.ramp.block(n)
+
+
+def crossfade(dry: np.ndarray, wet: np.ndarray, g) -> np.ndarray:
+    """Ścieżka modułu w torze według wzmocnienia z `Switch.block` (1.0 = sam moduł)."""
+    if isinstance(g, float) and g == 1.0:
+        return wet
+    return dry + (wet - dry) * g
+
+
 def one_pole_coef(tau_s: float, n: int, fs: float) -> float:
     """Współczynnik zbliżenia do celu po `n` próbkach dla stałej czasowej `tau_s`."""
     if tau_s <= 0:
@@ -152,6 +201,9 @@ class DelayLine:
 
     def set_delay(self, samples: int) -> None:
         self.delay = max(0, int(samples))
+
+    def reset(self) -> None:
+        self._hist = np.zeros((0, self.channels))
 
     def process(self, x: np.ndarray) -> np.ndarray:
         d = self.delay

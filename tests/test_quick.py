@@ -370,6 +370,75 @@ def _pump(app, n=4):
         app.processEvents()
 
 
+def test_theme_fits_viewport(app):
+    from ui import layout_profile as lp
+    from ui.quick import QmlTheme
+
+    t = QmlTheme()
+    t.set_viewport(1280, 720)
+    assert t.property("scale") == pytest.approx(0.9) and t.property("minCardWidth") == int(236 * 0.9)
+    t.set_viewport(2560, 1440)
+    assert t.property("scale") == pytest.approx(1.3)
+    t.set_viewport(1600, 1000)
+    assert t.property("scale") == pytest.approx(1.0)
+    t.set_viewport(2560, 1440)
+    t.apply(lp.DEFAULT_THEME | {"autoScale": False, "scale": 1.1})
+    assert t.property("scale") == pytest.approx(1.1)  # stała skala użytkownika
+
+
+def test_theme_auto_options_backward_compatible(store):
+    from ui import layout_profile as lp
+
+    old = lp.default_profile()
+    del old["theme"]["autoScale"], old["theme"]["autoExpand"]  # profil sprzed tych opcji
+    theme = lp.normalize(old, store.specs)["theme"]
+    assert theme["autoScale"] is True and theme["autoExpand"] is True
+    old["theme"]["autoExpand"] = False
+    assert lp.normalize(old, store.specs)["theme"]["autoExpand"] is False
+
+
+def _settle(app, n=12):
+    from PySide6.QtTest import QTest
+
+    for _ in range(n):
+        app.processEvents()
+        QTest.qWait(40)
+
+
+@pytest.mark.parametrize("size", [(1280, 720), (1920, 1080), (2560, 1440)])
+@pytest.mark.parametrize("screen", ["live", "config"])
+def test_cards_fill_rows(app, desk, size, screen):
+    """Poza edycją każdy rząd kart sięga prawej krawędzi siatki – bez dziur i rozstrzelonych kart."""
+    desk.session.setProperty("screen", screen)
+    desk.resize(*size)
+    _settle(app, 6)
+    root = desk.rootObject()
+    assert root.property("columns") >= root.property("maxColumns") // 2
+    grid_w = None
+    rows: dict[int, float] = {}
+    for ci in range(len(desk.layout.cards)):
+        item = root.cardItem(ci)
+        if item is None or not item.isVisible():
+            continue
+        grid_w = item.parentItem().width()
+        y = round(item.y())
+        rows[y] = max(rows.get(y, 0.0), item.x() + item.width())
+    assert rows
+    for right in rows.values():
+        assert grid_w - root.property("columns") - 1 <= right <= grid_w + 0.5
+
+
+def test_auto_expand_when_room(app, desk, layout):
+    desk.session.setProperty("screen", "live")
+    desk.resize(2560, 1440)
+    _settle(app)
+    root = desk.rootObject()
+    assert root.property("autoSet").toVariant()  # duży ekran: część kart sama pokazuje kontrolki spod WIĘCEJ
+    layout.setTheme("autoExpand", False)
+    _settle(app)
+    assert not root.property("autoSet").toVariant()
+
+
 def test_qml_loads_and_runs_without_warnings(app, desk, layout, store):
     msgs = []
     qInstallMessageHandler(lambda _mode, _ctx, msg: msgs.append(msg))
@@ -425,10 +494,11 @@ def test_qml_loads_and_runs_without_warnings(app, desk, layout, store):
             _pump(app)
             assert layout.cards[0]["title"] == title0
         layout.setTheme("tiles", True)
+        layout.setTheme("autoScale", False)  # przeliczenia px ekranu ↔ profil sprawdzane przy skali 1.0
         layout.setCardBox(0, 1, 1, 120)  # stała wysokość mniejsza niż treść → przewijanie w karcie
         _pump(app)
         card = root.cardItem(0)
-        assert abs(card.height() - 120) < 1
+        assert abs(card.height() - 120 * layout.theme.property("scale")) < 1  # px przy skali 100%
         root.nudgeHeight(0, 40)
         assert layout.cards[0]["height"] == 160
         root.autoHeight(0)

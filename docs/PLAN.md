@@ -106,7 +106,7 @@ flowchart LR
 - `PySide6`, `sounddevice` (WASAPI), `numpy`, `scipy`, `pyqtgraph`, `soundfile` (wczytywanie IR w WAV)
 - Opcjonalnie `numba` do pętli próbka po próbce (linia opóźniająca echa, syrena, waveshaper) i `mido` + `python-rtmidi` do sterowania kontrolerem MIDI
 
-## Struktura projektu: `c:\Users\eastwood\Project\Python\roots_soundsystem\`
+## Struktura projektu
 - `main.py` - punkt wejścia
 - `dsp/biquad.py` - współczynniki RBJ (peaking, shelf, HP/LP, allpass), pomocnicze `sosfilt` ze stanem `zi`
 - `dsp/eq12.py` - 12-pasmowy EQ (pasma i zachowanie jak w pierwotnym planie)
@@ -217,6 +217,7 @@ Kolejność: najpierw porządki i testy (bezpieczna podstawa), potem poprawki DS
 - Przyrost 4 (2026-10-09): odchudzenie paczki EXE 727 → 402 MB (filtr w `RootsSoundsystem.spec`: czarna lista rodzin Qt, moduły QML tylko QtQml/QtQuick bez zbędnych podmodułów i stylów, bez tłumaczeń Qt, wtyczek debugowania QML oraz testów/dokumentacji/przykładów bibliotek); `build_exe.ps1` po buildzie uruchamia `--selftest` i przerywa się przy błędzie. Skan importów PE: brak tylko `tbb12.dll` (opcjonalna warstwa wątków numba, wcześniej też jej nie było). `opengl32sw.dll` (20 MB) zostaje celowo – programowy zapas renderowania bez sterownika GPU.
 - Przyrost 5 (2026-10-09): wersja 0.2.0 – jedno źródło `version.py` (tytuł okna, Pomoc → O programie, zasób wersji EXE, wynik `--selftest`; test pilnuje zgodności z `pyproject.toml`), `CHANGELOG.md`. Nowa ikona (głośnik na ciemnym kafelku + pasek roots, rozmiary 16–256 z 20/24/40 dla skalowania 125–150%, rysunek w `ui.theme.paint_icon`), AppUserModelID – pasek zadań pokazuje ikonę aplikacji także przy starcie z kodu. Presety: 10 nowych EQ, presety syreny (8 wbudowanych + własne w `%APPDATA%\RootsSoundsystem\siren`), wspólny opis `presets.store.PRESET_KINDS`; QML `PresetsView` (EQ i syrena, `view:siren_presets` w karcie SYRENA), Widgets `PresetBar`.
 - Przyrost 6 (2026-10-09): integracja MIDImix i podgląd mapy – karta „MIDI – KONTROLER” (`view:midi_map`, `MidiMapView.qml`, kontekst `Midi` = `ui/quick/midi.py`): rysunek kontrolera z `MidiProfile.layout` (`Strip`/`Element`), warstwy NORMAL/SHIFT, wartości, diody, pozycje przed przejęciem i aktywność na żywo, edycja przypisań (`MidiController.assign/unassign`), eksport/import mapy, wskaźnik MIDI w nagłówku LIVE (klik = mapa, `Session.revealCard`). Automatyczne łączenie: `MidiController.ensure_connected` co 2 s (odłączenie, ponowne podłączenie pod innym numerem portu, pierwsze wykrycie znanego kontrolera). Akcje MIDI = akcje interfejsu (DSP on/off, pamięci M1–M4).
+- Przyrost 7 (2026-10-09): naprawa przełączania modułów DSP – wyłączony moduł zamrażał bufory i filtry, a po włączeniu odgrywał stary ogon (test `tests/test_switching.py`); `dsp.common.Switch` (przenikanie + `reset()` w wątku audio), CRASH przy wyłączonej sprężynie ignorowany. Losowe „kręcenie” wszystkimi parametrami (3000 bloków, też równolegle z wątkiem audio) nie zostawia innych śladów. Układ: plan kolumn bez dziur, skala auto, samoczynne „WIĘCEJ”. Publikacja: MIT, CI, CONTRIBUTING, `docs/`.
 - Do zrobienia: czcionki Barlow/IBM Plex w `assets/fonts`, docelowo okno w czystym QML i usunięcie Widgets.
 
 ### Akai MIDImix

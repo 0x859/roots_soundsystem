@@ -53,8 +53,26 @@ class QmlTheme(QObject):
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
         self._t: dict[str, Any] = copy.deepcopy(lp.DEFAULT_THEME)
+        self._fit = 1.0
         self._label_font = resolve_font(self._t["fonts"]["label"], LABEL_FONTS)
         self._value_font = resolve_font(self._t["fonts"]["value"], VALUE_FONTS)
+
+    # rozmiar widoku, przy którym skala automatyczna = 1.0, i granice mnożnika
+    FIT_BASE = (1600.0, 1000.0)
+    FIT_RANGE = (0.9, 1.3)
+
+    def set_viewport(self, width: float, height: float) -> None:
+        """Mnożnik skali z rozmiaru widoku (krok 0.05, żeby zmiana okna nie przeliczała wszystkiego co piksel)."""
+        lo, hi = self.FIT_RANGE
+        fit = min(width / self.FIT_BASE[0], height / self.FIT_BASE[1])
+        fit = round(min(hi, max(lo, fit)) * 20) / 20
+        if fit != self._fit:
+            self._fit = fit
+            if self._t.get("autoScale", True):
+                self.changed.emit()
+
+    def _scale(self) -> float:
+        return float(self._t["scale"]) * (self._fit if self._t.get("autoScale", True) else 1.0)
 
     def apply(self, theme: dict[str, Any]) -> None:
         if theme == self._t:
@@ -78,13 +96,16 @@ class QmlTheme(QObject):
     kill = Property(str, lambda s: s._col("kill"), notify=changed)
     labelFont = Property(str, lambda s: s._label_font, notify=changed)
     valueFont = Property(str, lambda s: s._value_font, notify=changed)
-    scale = Property(float, lambda s: float(s._t["scale"]), notify=changed)
+    scale = Property(float, lambda s: s._scale(), notify=changed)
+    fit = Property(float, lambda s: s._fit, notify=changed)
+    autoScale = Property(bool, lambda s: bool(s._t.get("autoScale", True)), notify=changed)
+    autoExpand = Property(bool, lambda s: bool(s._t.get("autoExpand", True)), notify=changed)
     density = Property(str, lambda s: s._t["density"], notify=changed)
-    spacing = Property(int, lambda s: int(DENSITY_SPACING[s._t["density"]] * s._t["scale"]), notify=changed)
+    spacing = Property(int, lambda s: int(DENSITY_SPACING[s._t["density"]] * s._scale()), notify=changed)
     knobStyle = Property(str, lambda s: s._t["knobStyle"], notify=changed)
     padPosition = Property(str, lambda s: s._t["pads"]["position"], notify=changed)
-    padHeight = Property(int, lambda s: int(s._t["pads"]["height"] * s._t["scale"]), notify=changed)
-    minCardWidth = Property(int, lambda s: int(s._t["minCardWidth"] * s._t["scale"]), notify=changed)
+    padHeight = Property(int, lambda s: int(s._t["pads"]["height"] * s._scale()), notify=changed)
+    minCardWidth = Property(int, lambda s: int(s._t["minCardWidth"] * s._scale()), notify=changed)
     tiles = Property(bool, lambda s: bool(s._t["tiles"]), notify=changed)
     inspectorWidth = Property(int, lambda s: int(s._t["inspectorWidth"]), notify=changed)
 

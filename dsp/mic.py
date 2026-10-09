@@ -11,7 +11,7 @@ import numpy as np
 from engine.params import ParamSpec
 
 from .biquad import SOSFilter, high_shelf, highpass, identity, low_shelf, peaking
-from .common import Ramp, db2lin, lin2db, one_pole_coef
+from .common import Ramp, Switch, db2lin, lin2db, one_pole_coef
 
 PARAMS = [
     ParamSpec("mic.enabled", "Mikrofon", True, kind="bool"),
@@ -59,9 +59,22 @@ class MicChannel:
         self._duck = 1.0
         self.level_db = -120.0
         self.gr_db = 0.0
+        self.switch = Switch(fs, on_silent=self.reset)
+
+    def reset(self) -> None:
+        self.hp.reset()
+        self.eq.reset()
+        self._gate_open = False
+        self._gate_g = 0.0
+        self._gr_db = 0.0
+        self._comp_g = 1.0
+        self.gr_db = 0.0
+        self.gain.snap()
+        self.level.snap()
 
     def configure(self, p) -> None:
         self.enabled = bool(p["mic.enabled"])
+        self.switch.set(self.enabled)
         self.gain.set(db2lin(float(p["mic.gain"])))
         self.level.set(db2lin(float(p["mic.level"])))
         self.hp_on = bool(p["mic.hp"])
@@ -87,7 +100,8 @@ class MicChannel:
     def process(self, x: np.ndarray | None, n: int):
         """Zwraca (sygnał stereo lub None, wzmocnienie duckingu muzyki)."""
         duck_prev = self._duck
-        if not self.enabled or x is None:
+        sw = self.switch.block(n)
+        if sw is None or x is None:
             self._duck = duck_prev + (1.0 - duck_prev) * one_pole_coef(DUCK_RELEASE_S, n, self.fs)
             self.level_db = -120.0
             duck = self._ramp(duck_prev, self._duck, n) if duck_prev != self._duck else 1.0
@@ -123,6 +137,8 @@ class MicChannel:
 
         dyn = self._ramp(g_prev * c_prev, self._gate_g * self._comp_g, n)
         y = self.eq.process(m * dyn) * self.level.block(n)
+        if not isinstance(sw, float):
+            y = y * sw
 
         duck_target = self.duck_depth if (self.talkover and self._gate_open) else 1.0
         tau = DUCK_ATTACK_S if duck_target < duck_prev else DUCK_RELEASE_S

@@ -59,6 +59,13 @@ class SweepFilter:
         if self.use_jit:
             _svf_block(np.zeros((4, self.channels)), np.full(4, 0.1), 1.0, np.zeros(self.channels), np.zeros(self.channels), True)
 
+    def reset(self) -> None:
+        """Czysty stan filtra; częstotliwość od razu docelowa (bez przemiatania od starej wartości)."""
+        self._ic1[:] = 0.0
+        self._ic2[:] = 0.0
+        self._sos.reset()
+        self.cur = self.target
+
     def set(self, freq: float, res: float) -> None:
         self.target = float(min(max(freq, 10.0), self.fmax))
         self.q = res_to_q(res)

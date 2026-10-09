@@ -1,7 +1,7 @@
 # Historia zmian
 
 Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje według [SemVer](https://semver.org/lang/pl/).
-MINOR odpowiada etapowi planu (`Plan.md`), PATCH – poprawkom w jego obrębie. Wersja jest w `version.py`.
+MINOR odpowiada etapowi planu (`docs/PLAN.md`), PATCH – poprawkom w jego obrębie. Wersja jest w `version.py`.
 
 ## [0.2.0] – 2026-10-09
 
@@ -17,7 +17,12 @@ Etap 2 (w toku): nowy interfejs QML z konfigurowalnym układem.
 - Presety syreny: 8 wbudowanych brzmień i własne presety; 10 nowych presetów EQ (Dub, Steppers, Lovers rock, Plener, sale, Winyl, Ochrona góry, lo-fi, Radio).
 - Wersja w tytule okna, okno *Pomoc → O programie*, zasób wersji w EXE, autotest paczki `--selftest`.
 
+### Poprawione
+- Moduły DSP po wyłączeniu i ponownym włączeniu odgrywały resztki sprzed wyłączenia (echo, sprężyna, pogłos miejsca, stany filtrów – przy ciszy nawet do −0,5 dBFS), a przełączanie dawało trzaski; CRASH wciśnięty przy wyłączonej sprężynie odpalał się po jej włączeniu. Teraz krótkie przenikanie i czysty stan po każdym włączeniu.
+- Układ kart: rzędy wypełniają szerokość (bez dziur na dużych ekranach), skala dopasowana do okna, karty same rozwijają „WIĘCEJ”, gdy jest miejsce.
+
 ### Zmienione
+- Repozytorium gotowe do publikacji: licencja MIT, `CONTRIBUTING.md`, CI (GitHub Actions: ruff + pytest na Windows), `.gitattributes`, plan w `docs/PLAN.md`.
 - Nowa ikona (głośnik na ciemnym kafelku z paskiem roots) we wszystkich rozmiarach 16–256 px; pasek zadań Windows pokazuje ją także przy starcie z kodu.
 - Paczka EXE odchudzona z 727 do ok. 400 MB; build sam uruchamia autotest.
 

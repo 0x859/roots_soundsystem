@@ -26,8 +26,134 @@ Rectangle {
     property var rs: null
     property real inspW: Theme.inspectorWidth
 
-    readonly property int columns: Math.max(1, Math.floor((grid.width + gap) / (Theme.minCardWidth + gap)))
-    readonly property real colW: (grid.width - gap * (columns - 1)) / columns
+    // najwięcej kolumn, jakie mieszczą się w szerokości okna
+    readonly property int maxColumns: Math.max(1, Math.floor((grid.width + gap) / (Theme.minCardWidth + gap)))
+    // plan układu poza edycją: liczba kolumn z najmniejszą liczbą pustych komórek (dziury w środku liczą się
+    // podwójnie, pusty koniec ostatniego rzędu pojedynczo), a resztę miejsca w każdym rzędzie dostają karty
+    // tego rzędu – rzędy zawsze wypełniają szerokość (7 kart przy 6 kolumnach = 4 + 3, a nie 6 + 1)
+    function packRows(items, c) {
+        const rows = []
+        let cur = [], used = 0
+        for (const it of items) {
+            const sp = Math.min(it.span, c)
+            if (used + sp > c && cur.length) { rows.push(cur); cur = []; used = 0 }
+            cur.push({ ci: it.ci, span: sp })
+            used += sp
+        }
+        if (cur.length) rows.push(cur)
+        return rows
+    }
+    readonly property var plan: {
+        const items = []
+        for (let ci = 0; ci < Profile.cards.length; ci++) {
+            const c = Profile.cards[ci]
+            if (cardShown(c)) items.push({ ci: ci, span: Math.max(1, c.span) })
+        }
+        if (editing || items.length === 0) return { columns: maxColumns, spans: {} }
+        // nie mniej niż połowa możliwych kolumn: jedna wąska kolumna też „nie ma dziur”, ale marnuje szerokość
+        const widest = Math.min(maxColumns, Math.max(Math.ceil(maxColumns / 2), ...items.map(it => it.span)))
+        let best = null
+        for (let c = maxColumns; c >= widest; c--) {
+            const rows = packRows(items, c)
+            let score = 0
+            rows.forEach((row, i) => {
+                const free = c - row.reduce((a, it) => a + it.span, 0)
+                score += free * (i < rows.length - 1 ? 2 : 1)
+            })
+            if (best === null || score < best.score) best = { columns: c, rows: rows, score: score }
+        }
+        const spans = {}
+        for (const row of best.rows) {
+            let free = best.columns - row.reduce((a, it) => a + it.span, 0)
+            for (let k = 0; free > 0; k = (k + 1) % row.length, free--) row[k].span += 1
+            for (const it of row) spans[it.ci] = it.span
+        }
+        return { columns: best.columns, spans: spans }
+    }
+    readonly property int columns: plan.columns
+    // w dół do pełnych pikseli: zaokrąglenia układu nie wypchną karty poza prawą krawędź
+    readonly property real colW: Math.floor((grid.width - gap * (columns - 1)) / columns)
+    function spanOf(ci, span) {
+        const s = plan.spans[ci]
+        return s !== undefined ? s : Math.min(span, columns)
+    }
+
+    // automatyczne „WIĘCEJ”: karty same pokazują kontrolki spod „WIĘCEJ”, o ile całość mieści się na
+    // ekranie bez przewijania. Po ustaniu zmian (okno, ekran, profil, motyw) dwa pomiary naturalnych
+    // wysokości kart – rozwiniętych i zwiniętych – a potem zachłanny wybór: najpierw karty, które
+    // dokładają najmniej wysokości. Ręczne WIĘCEJ/MNIEJ ma pierwszeństwo (root.expanded).
+    property var autoSet: ({})
+    property var hExpanded: ({})
+    function refit() { fitSettle.restart() }
+    function shownCards() {
+        const out = []
+        for (let ci = 0; ci < Profile.cards.length; ci++) {
+            const item = cardItem(ci)
+            if (item && item.visible && item.collapsible && !item.collapsed && item.fixedH <= 0)
+                out.push({ id: Profile.cards[ci].id, item: item })
+        }
+        return out
+    }
+    function chooseExpanded() {
+        const rows = {}
+        const all = []
+        for (let ci = 0; ci < Profile.cards.length; ci++) {
+            const item = cardItem(ci)
+            if (!item || !item.visible) continue
+            const id = Profile.cards[ci].id
+            const he = hExpanded[id]
+            const c = { id: id, row: Math.round(item.y), h: item.implicitHeight,
+                        extra: he !== undefined && item.collapsible && expanded[id] === undefined ? he - item.implicitHeight : 0 }
+            c.he = item.implicitHeight + c.extra
+            all.push(c)
+            ;(rows[c.row] = rows[c.row] || []).push(c)
+        }
+        const keys = Object.keys(rows)
+        const total = () => keys.reduce((sum, k) => sum + Math.max(...rows[k].map(c => c.h)), 0) + gap * (keys.length - 1)
+        const avail = flick.height - 4
+        const chosen = {}
+        for (const c of all.filter(c => c.extra > 0).sort((a, b) => a.extra - b.extra)) {
+            const before = c.h
+            c.h = c.he
+            if (total() <= avail) chosen[c.id] = true
+            else c.h = before
+        }
+        autoSet = chosen
+    }
+    Timer {
+        id: fitSettle
+        interval: 150
+        onTriggered: {
+            if (!Theme.autoExpand || root.editing) { root.autoSet = ({}); return }
+            const all = {}
+            for (const c of root.shownCards()) all[c.id] = true
+            root.autoSet = all
+            fitMeasure.restart()
+        }
+    }
+    Timer {
+        id: fitMeasure
+        interval: 50
+        onTriggered: {
+            const h = {}
+            for (const c of root.shownCards()) h[c.id] = c.item.implicitHeight
+            root.hExpanded = h
+            root.autoSet = ({})
+            fitChoose.restart()
+        }
+    }
+    Timer {
+        id: fitChoose
+        interval: 50
+        onTriggered: root.chooseExpanded()
+    }
+    onWidthChanged: refit()
+    onHeightChanged: refit()
+    onEditingChanged: refit()
+    function cardExpanded(id) {
+        const e = expanded[id]
+        return e === undefined ? autoSet[id] === true : e
+    }
 
     function cardShown(card) {
         return card.visible === "both" || card.visible === Session.screen
@@ -77,7 +203,7 @@ Rectangle {
     }
     function toggleExpanded(id) {
         const e = Object.assign({}, expanded)
-        e[id] = !e[id]
+        e[id] = !cardExpanded(id)
         expanded = e
     }
     function toggleCollapsed(ci) {
@@ -232,8 +358,13 @@ Rectangle {
     }
 
     Connections {
+        target: Theme
+        function onChanged() { root.refit() }
+    }
+    Connections {
         target: Profile
         function onCardsChanged() {
+            root.refit()
             if (root.selCard >= Profile.cards.length) { root.selCard = -1; root.selCtl = -1 }
         }
         function onMessage(text) { toast.show(text) }
@@ -248,6 +379,7 @@ Rectangle {
     Connections {
         target: Session
         function onToast(text) { toast.show(text) }
+        function onScreenChanged() { root.refit() }
         function onRevealCard(target) { revealTimer.target = target; revealTimer.restart() }
         function onEditingChanged() {
             root.cancelDrag()
@@ -324,6 +456,8 @@ Rectangle {
                 GridLayout {
                     id: grid
                     width: flick.width - (vbar.visible && vbar.size < 1 ? 12 : 0)
+                    // poza edycją rzędy kart rozciągają się do wysokości ekranu (bez pustego pasa pod kartami)
+                    height: root.editing ? implicitHeight : Math.max(implicitHeight, flick.height - 4)
                     columns: root.columns
                     columnSpacing: root.gap
                     rowSpacing: root.gap
@@ -334,7 +468,7 @@ Rectangle {
                         delegate: Card {
                             required property int index
                             required property var modelData
-                            readonly property int span: Math.min(modelData.span, root.columns)
+                            readonly property int span: root.spanOf(index, modelData.span)
                             cardData: modelData
                             ci: index
                             host: root
@@ -346,7 +480,7 @@ Rectangle {
                             dropAfter: root.dropAfter
                             dropK: root.dragInfo !== null && root.dragInfo.kind === "control" && root.dropCi === index ? root.dropK : -1
                             dropKAfter: root.dropKAfter
-                            expanded: root.expanded[modelData.id] === true
+                            expanded: root.cardExpanded(modelData.id)
                             Layout.columnSpan: span
                             Layout.rowSpan: modelData.rows
                             Layout.preferredWidth: root.colW * span + root.gap * (span - 1)

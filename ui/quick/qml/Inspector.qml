@@ -465,6 +465,26 @@ Rectangle {
                         onPicked: (v) => Profile.setTheme("knobStyle", v)
                     }
 
+                    Caption { text: "DOPASOWANIE DO OKNA" + (Theme.autoScale ? " (×" + Theme.fit.toFixed(2) + ")" : "") }
+                    Seg {
+                        fill: true
+                        width: parent.width
+                        height: 42 * root.s
+                        fontSize: 13
+                        model: [{ label: "SKALA AUTO", value: true }, { label: "STAŁA", value: false }]
+                        current: Theme.autoScale
+                        onPicked: (v) => Profile.setTheme("autoScale", v)
+                    }
+                    Seg {
+                        fill: true
+                        width: parent.width
+                        height: 42 * root.s
+                        fontSize: 13
+                        model: [{ label: "ROZWIJAJ, GDY JEST MIEJSCE", value: true }, { label: "TYLKO RĘCZNIE", value: false }]
+                        current: Theme.autoExpand
+                        onPicked: (v) => Profile.setTheme("autoExpand", v)
+                    }
+
                     Caption { text: "RAMKI KONTROLEK (TRYB GRY)" }
                     Seg {
                         fill: true

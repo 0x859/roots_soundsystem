@@ -2,6 +2,9 @@
 name = "roots-soundsystem"
 version = "0.2.0"
 description = "Cyfrowy tor soundsystemu roots and culture (Windows 11, PySide6)"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Aleksander Sozański" }]
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]

@@ -13,6 +13,8 @@ from scipy import signal
 
 from engine.params import ParamSpec
 
+from .common import Switch, crossfade
+
 ROOM_KEYS = ("dancehall", "concrete", "outdoor", "custom")
 ROOM_LABELS = ("Dancehall", "Sala betonowa", "Plener", "Własna IR")
 MAX_IR_S = 4.0
@@ -100,6 +102,10 @@ class PartitionedConvolver:
         self._prev = np.zeros((B, self.channels))
         self._idx = 0
 
+    def reset(self) -> None:
+        self._X[:] = 0.0
+        self._prev[:] = 0.0
+
     def process(self, x: np.ndarray) -> np.ndarray:
         B, P = self.block, self.P
         if len(x) != B:
@@ -128,6 +134,12 @@ class Room:
         self._lock = threading.Lock()
         self._dry = 1.0
         self._wet = 0.0
+        self.switch = Switch(fs, on_silent=self.reset)
+
+    def reset(self) -> None:
+        conv = self.conv
+        if conv is not None:
+            conv.reset()
 
     def load_custom(self, path: str) -> None:
         ir = load_ir_file(path, self.fs)
@@ -150,6 +162,7 @@ class Room:
     def configure(self, p) -> None:
         with self._lock:
             self.enabled = bool(p["room.enabled"])
+            self.switch.set(self.enabled)
             self.mix = float(p["room.mix"])
             self._dry = float(np.cos(self.mix * np.pi / 2))
             self._wet = float(np.sin(self.mix * np.pi / 2))
@@ -158,6 +171,7 @@ class Room:
 
     def process(self, x: np.ndarray) -> np.ndarray:
         conv = self.conv
-        if not self.enabled or conv is None or self._wet == 0.0:
+        g = self.switch.block(len(x))
+        if g is None or conv is None or self._wet == 0.0:
             return x
-        return x * self._dry + conv.process(x) * self._wet
+        return crossfade(x, x * self._dry + conv.process(x) * self._wet, g)

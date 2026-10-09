@@ -1,11 +1,11 @@
 # Roots Soundsystem – kontekst dla Claude Code
 
 Cyfrowy tor soundsystemu roots and culture na Windows 11 (Python 3.14, PySide6, numpy/scipy, sounddevice/WASAPI).
-Pełny plan, decyzje i stan prac: `Plan.md` (sekcja „Etap 2: rozwój”). README opisuje obsługę dla użytkownika.
+Pełny plan, decyzje i stan prac: `docs/PLAN.md` (sekcja „Etap 2: rozwój”). README opisuje obsługę dla użytkownika.
 
 ## Język i styl
 - Rozmawiaj po polsku. Komentarze, docstringi i teksty w UI po polsku.
-- Końce linii **CRLF** we wszystkich plikach (patrz `.editorconfig`, `ruff format` ma `line-ending = "cr-lf"`). Nie zmieniaj końców linii w plikach, których nie edytujesz.
+- Końce linii **CRLF** we wszystkich plikach (patrz `.editorconfig`, `.gitattributes`, `ruff format` ma `line-ending = "cr-lf"`; w repozytorium git trzyma LF). Nie zmieniaj końców linii w plikach, których nie edytujesz.
 - Formatowanie przy zapisie jest wyłączone celowo – nie przeformatowuj całych plików.
 
 ## Polecenia
@@ -31,17 +31,18 @@ Pełny plan, decyzje i stan prac: `Plan.md` (sekcja „Etap 2: rozwój”). READ
 - Każda zmiana profilu przebudowuje wszystkie karty (Repeater po `Profile.cards`) – stan, który ma przetrwać (zaznaczenie, menu karty, rozwinięcia), trzymaj w `Main.qml`, nie w `Card.qml`.
 - `ui/main_window.py`, `ui/panels/`, `ui/widgets/` – stół klasyczny (Qt Widgets), dostępny w menu Widok do końca migracji.
 
-## Sprzęt użytkownika
-- Akai MIDImix (USB, kanał 1; CC i nuty opisane w `engine/midi_profiles.py` i `Plan.md`).
+## Sprzęt referencyjny (na nim projekt jest rozwijany i testowany)
+- Akai MIDImix (USB, kanał 1; CC i nuty opisane w `engine/midi_profiles.py` i `docs/PLAN.md`).
 - Focusrite Scarlett 4i4 3rd gen. Źródło muzyki domyślnie VB-Cable; Loopback jako opcja (ryzyko pętli sprzężenia).
 
 ## Etap w toku: QML z konfigurowalnym układem
-- Zrobione: LIVE i KONFIGURACJA jako karty z profilu JSON, pasek padów, tryb „Edycja układu” (inspektor, przeciąganie, cofanie, profile, import/eksport). Do zrobienia – patrz `Plan.md`, sekcja „QML – stan”.
+- Zrobione: LIVE i KONFIGURACJA jako karty z profilu JSON, pasek padów, tryb „Edycja układu” (inspektor, przeciąganie, cofanie, profile, import/eksport). Do zrobienia – patrz `docs/PLAN.md`, sekcja „QML – stan”.
+- Układ poza edycją: `Main.qml` → `plan` (kolumny z najmniejszą liczbą pustych komórek, reszta rzędu rozdana kartom), `autoSet` (karty rozwijane automatycznie po pomiarze wysokości), skala auto `QmlTheme.set_viewport` (opcje motywu `autoScale`, `autoExpand`).
+- Moduły DSP włącza `dsp.common.Switch`: przenikanie ~15 ms, a po wyciszeniu `reset()` modułu w wątku audio (bez starych ogonów po ponownym włączeniu). Nowy moduł z `enabled` = `Switch` + `reset()` + test w `tests/test_switching.py`.
 - Podgląd QML bez okna: `QQuickWindow.setGraphicsApi(Software)` + `QT_QPA_PLATFORM=offscreen` + `QT_QPA_FONTDIR=C:/Windows/Fonts`, potem `grabFramebuffer()`.
 - Zatwierdzony kierunek wizualny: ciemny stół, złoto = tor sygnału, turkus = efekty, czerwień = kill/stop; Barlow Condensed (etykiety) + IBM Plex Mono (wartości).
 - Ekrany: LIVE (karty w siatce o liczbie kolumn zależnej od szerokości okna + pasek padów) i KONFIGURACJA (urządzenia, zwrotnica, kolumny/miejsce, EQ12, MIDI, sceny).
 - Użytkownik chce móc dostosować **każdy** aspekt: układ to profil JSON (karty, kontrolki z parametrami `ParamStore`, pady, motyw), edytowany w trybie „Edycja układu”.
-- Makiety: artefakt „Roots Soundsystem – nowy interfejs” na claude.ai (https://claude.ai/artifact/FPCv64ttVvLbMYPsUwX82F).
 - Migracja panel po panelu; wersja Widgets działa do końca etapu.
 
 ## Zasady pracy

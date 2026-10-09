@@ -12,7 +12,7 @@ import numpy as np
 from engine.params import ParamSpec
 
 from .biquad import SOSFilter, highpass, lowpass
-from .common import Ramp
+from .common import Ramp, Switch
 
 SYNC_CHOICES = ("Wolny", "1/2", "1/4.", "1/4", "1/8.", "1/8", "1/16")
 SYNC_BEATS = (None, 2.0, 1.5, 1.0, 0.75, 0.5, 0.25)
@@ -66,9 +66,19 @@ class TapeEcho:
         self.ret = Ramp(0.8, 20, fs)
         self.loop = SOSFilter(np.vstack([highpass(150, 0.707, fs), lowpass(3500, 0.707, fs)]), channels)
         self._idle = 0
+        self.switch = Switch(fs, on_silent=self.reset)
+
+    def reset(self) -> None:
+        """Czysta taśma: bez ogona sprzed wyłączenia, czas od razu docelowy (bez „przewijania”)."""
+        self.buf.fill(0.0)
+        self.loop.reset()
+        self.d = self.target_d
+        self.ph_wow = self.ph_flut = 0.0
+        self.ret.snap()
 
     def configure(self, p) -> None:
         self.enabled = bool(p["echo.enabled"])
+        self.switch.set(self.enabled)
         self.target_d = max(self.min_d, echo_time_ms(p) * self.fs / 1000.0)
         self.glide_s = float(p["echo.glide"]) / 1000.0
         self.fb = float(p["echo.feedback"])
@@ -79,8 +89,13 @@ class TapeEcho:
 
     def process(self, x: np.ndarray) -> np.ndarray | None:
         n = len(x)
-        if not self.enabled:
+        g = self.switch.block(n)
+        if g is None:
             return None
+        y = self._process(x, n)
+        return y if isinstance(g, float) else y * g
+
+    def _process(self, x: np.ndarray, n: int) -> np.ndarray:
         k = np.arange(1, n + 1)
         r = np.exp(-1.0 / (self.glide_s * self.fs))
         d = self.target_d + (self.d - self.target_d) * r ** k

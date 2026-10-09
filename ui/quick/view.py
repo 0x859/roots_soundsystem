@@ -56,6 +56,10 @@ class QuickDesk(QQuickWidget):
         for obj in (params, layout, session, self.plots, self.audio, self.midi):
             obj.setParent(self)
 
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.layout.theme.set_viewport(self.width(), self.height())
+
     def shutdown(self, *_args) -> None:
         """Wyładowuje scenę QML (bez błędów wiązań przy niszczeniu obiektów kontekstu)."""
         if self.source().isEmpty():

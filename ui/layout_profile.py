@@ -81,6 +81,8 @@ DEFAULT_THEME: dict[str, Any] = {
     "minCardWidth": 236,
     "tiles": False,
     "inspectorWidth": 360,
+    "autoScale": True,  # skala dopasowana do rozmiaru okna (mnożnik skali użytkownika)
+    "autoExpand": True,  # karty same pokazują kontrolki spod „WIĘCEJ”, gdy mieszczą się bez przewijania
 }
 
 
@@ -406,6 +408,8 @@ def _theme_norm(raw: Any) -> dict[str, Any]:
     base["knobStyle"] = _pick(raw.get("knobStyle"), KNOB_STYLES, "both")
     base["minCardWidth"] = int(_num(raw.get("minCardWidth"), 180, 480, 236))
     base["tiles"] = raw.get("tiles") is True
+    base["autoScale"] = raw.get("autoScale") is not False
+    base["autoExpand"] = raw.get("autoExpand") is not False
     base["inspectorWidth"] = int(_num(raw.get("inspectorWidth"), 280, 640, 360))
     pads = raw.get("pads")
     if isinstance(pads, dict):

@@ -7,7 +7,7 @@ import numpy as np
 from engine.params import ParamSpec
 
 from .bandsplit import BandSplitter
-from .common import Ramp, gain_from_db
+from .common import Ramp, Switch, crossfade, gain_from_db
 
 BANDS = ("sub", "bass", "lowmid", "highmid", "top")
 BAND_LABELS = {"sub": "Sub", "bass": "Bass", "lowmid": "Low-mid", "highmid": "High-mid", "top": "Top"}
@@ -39,9 +39,16 @@ class Isolator:
         self.order = 8
         self.splitter = BandSplitter(fs, [s[2] for s in SPLITS], self.order, channels)
         self.gains = [Ramp(1.0, KILL_RAMP_MS, fs) for _ in BANDS]
+        self.switch = Switch(fs, on_silent=self.reset)
+
+    def reset(self) -> None:
+        self.splitter.reset()
+        for ramp in self.gains:
+            ramp.snap()
 
     def configure(self, p) -> None:
         self.enabled = bool(p["iso.enabled"])
+        self.switch.set(self.enabled)
         order = SLOPE_ORDER[int(p["iso.slope"])]
         freqs = sorted(float(p[s[0]]) for s in SPLITS)
         if order != self.order:
@@ -54,9 +61,13 @@ class Isolator:
             ramp.set(g)
 
     def process(self, x: np.ndarray) -> np.ndarray:
-        if not self.enabled:
-            return x
         n = len(x)
+        sw = self.switch.block(n)
+        if sw is None:
+            return x
+        return crossfade(x, self._process(x, n), sw)
+
+    def _process(self, x: np.ndarray, n: int) -> np.ndarray:
         bands = self.splitter.process(x)
         y = np.zeros_like(x)
         for band, ramp in zip(bands, self.gains, strict=False):  # wątek audio
