@@ -39,7 +39,7 @@ class Isolator:
         self.order = 8
         self.splitter = BandSplitter(fs, [s[2] for s in SPLITS], self.order, channels)
         self.gains = [Ramp(1.0, KILL_RAMP_MS, fs) for _ in BANDS]
-        self.switch = Switch(fs, on_silent=self.reset)
+        self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
         self.splitter.reset()
@@ -48,7 +48,6 @@ class Isolator:
 
     def configure(self, p) -> None:
         self.enabled = bool(p["iso.enabled"])
-        self.switch.set(self.enabled)
         order = SLOPE_ORDER[int(p["iso.slope"])]
         freqs = sorted(float(p[s[0]]) for s in SPLITS)
         if order != self.order:
@@ -59,6 +58,7 @@ class Isolator:
         for ramp, b in zip(self.gains, BANDS, strict=True):
             g = 0.0 if p[f"iso.kill.{b}"] else gain_from_db(float(p[f"iso.g.{b}"]), KILL_DB)
             ramp.set(g)
+        self.switch.set(self.enabled)
 
     def process(self, x: np.ndarray) -> np.ndarray:
         n = len(x)

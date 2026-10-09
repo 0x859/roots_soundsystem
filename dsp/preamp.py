@@ -78,7 +78,7 @@ class Preamp:
         self.hp = SweepFilter("hp", fs, channels)
         self.lp = SweepFilter("lp", fs, channels)
         self._tone_sos = self.tone.sos
-        self.switch = Switch(fs, on_silent=self.reset)
+        self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
         self.oversampler.reset()
@@ -94,7 +94,6 @@ class Preamp:
 
     def configure(self, p) -> None:
         self.enabled = bool(p["preamp.enabled"])
-        self.switch.set(self.enabled)
         self.gain.set(db2lin(p["preamp.gain"]))
         self.master.set(db2lin(p["preamp.master"]))
         self.drive = float(p["preamp.drive"])
@@ -112,6 +111,7 @@ class Preamp:
         res = float(p["preamp.res"])
         self.hp.set(float(p["preamp.hp"]), res)
         self.lp.set(float(p["preamp.lp"]), res)
+        self.switch.set(self.enabled)
 
     def process(self, x: np.ndarray) -> np.ndarray:
         n = len(x)

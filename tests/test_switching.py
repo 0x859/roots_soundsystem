@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from dsp.common import Switch
 from dsp.graph import SignalChain, bypass_values
 
 FS, B = 48000, 512
@@ -77,6 +78,14 @@ def test_crash_ignored_while_spring_disabled(store):
     assert np.max(np.abs(_run(chain, 40, level=0.0))) < 1e-6
 
 
+def test_crash_with_enabling_spring_plays(store):
+    """CRASH w tej samej zmianie co włączenie sprężyny (scena, makro) gra – reset przy włączeniu go nie kasuje."""
+    chain = _chain(store, {})
+    _run(chain, 10, level=0.0)
+    store.set_many({"spring.enabled": True, "spring.crash": True})
+    assert np.max(np.abs(_run(chain, 20, level=0.0))) > 0.01
+
+
 def test_quick_toggle_keeps_effect_working(store):
     """Szybkie wyłącz/włącz (krócej niż przenikanie) nie gubi efektu: echo dalej odpowiada na sygnał."""
     chain = _chain(store, {"echo.enabled": True, "preamp.echo_send": 1.0, "echo.feedback": 0.5})
@@ -99,3 +108,54 @@ def test_disabled_modules_cost_nothing(store):
     for _ in range(4):
         y = chain.process(x)
     assert np.all(np.isfinite(y))
+
+
+def test_switch_on_never_seen_before_ramp():
+    """Blok audio w trakcie `set(True)` (wątek sterujący) nie widzi włączonego modułu z rampą jeszcze na 0."""
+    s = Switch(FS)
+    s.block(B)
+    s.set(False)
+    for _ in range(5):
+        s.block(B)
+    seen = []
+    ramp_set = s.ramp.set
+
+    def interleaved(target):
+        seen.append(s.block(B))  # wątek audio wchodzi między kroki `set`
+        ramp_set(target)
+
+    s.ramp.set = interleaved
+    s.set(True)
+    assert seen == [None]
+
+
+@pytest.mark.parametrize("name", ["echo", "spring", "mic"])
+def test_effect_scales_by_scalar_switch_gain(store, name, monkeypatch):
+    """Skalarne wzmocnienie z przełącznika inne niż 1.0 (tu 0.0) wycisza efekt, a nie przepuszcza go w całości."""
+    chain = _chain(store, {f"{name}.enabled": True} | CASES[f"{name}.enabled"])
+    _run(chain, 100)
+    mod = getattr(chain, name)
+    monkeypatch.setattr(mod.switch, "block", lambda n: 0.0)
+    x = 0.3 * np.random.default_rng(1).standard_normal((B, 2))
+    y = mod.process(x[:, :1], B)[0] if name == "mic" else mod.process(x)
+    assert y is None or np.max(np.abs(y)) < 1e-12
+
+
+@pytest.mark.parametrize(
+    ("switch", "changes", "state"),
+    [
+        ("echo.enabled", {"echo.time": 750.0}, lambda c: (c.echo.d, c.echo.target_d)),
+        ("preamp.enabled", {"preamp.hp": 300.0}, lambda c: (c.preamp.hp.cur, c.preamp.hp.target)),
+    ],
+)
+def test_reenabled_module_starts_at_current_settings(store, switch, changes, state):
+    """Ustawienia zmienione przy wyłączonym module obowiązują od razu po włączeniu (bez przewijania echa i sweepu)."""
+    chain = _chain(store, {switch: True})
+    _run(chain, 20)
+    store.set(switch, False)
+    _run(chain, 10, level=0.0)
+    store.set_many(changes)
+    store.set(switch, True)
+    _run(chain, 1)
+    cur, target = state(chain)
+    assert cur == pytest.approx(target)

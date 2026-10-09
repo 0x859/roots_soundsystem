@@ -83,7 +83,7 @@ class CabinetStack:
         self.bassfeel = BassFeel(fs)
         self.bassfeel_amt = Ramp(0.0, 30, fs)
         self.enabled = True
-        self.switch = Switch(fs, on_silent=self.reset)
+        self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
         for f in self.filters.values():
@@ -95,7 +95,6 @@ class CabinetStack:
 
     def configure(self, p) -> None:
         self.enabled = bool(p["sim.enabled"])
-        self.switch.set(self.enabled)
         for w in ALL_WAYS:
             key = PROFILE_KEYS[int(p[f"sim.cab.{w}"])]
             if key != self.profile[w]:
@@ -106,6 +105,7 @@ class CabinetStack:
         self.mono_bass = bool(p["sim.mono_bass"])
         self.sub_delay.set_delay(int(round(float(p["sim.sub_delay"]) * self.fs / 1000.0)))
         self.bassfeel_amt.set(float(p["sim.bassfeel"]))
+        self.switch.set(self.enabled)
 
     def process(self, ways: dict[str, np.ndarray], n: int) -> np.ndarray:
         # bez modeli: zwykła suma dróg (LR4 sumuje się płasko), bez kompresji, szerokości i bass feel

@@ -59,7 +59,7 @@ class MicChannel:
         self._duck = 1.0
         self.level_db = -120.0
         self.gr_db = 0.0
-        self.switch = Switch(fs, on_silent=self.reset)
+        self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
         self.hp.reset()
@@ -74,7 +74,6 @@ class MicChannel:
 
     def configure(self, p) -> None:
         self.enabled = bool(p["mic.enabled"])
-        self.switch.set(self.enabled)
         self.gain.set(db2lin(float(p["mic.gain"])))
         self.level.set(db2lin(float(p["mic.level"])))
         self.hp_on = bool(p["mic.hp"])
@@ -92,6 +91,7 @@ class MicChannel:
                 ]
             )
         )
+        self.switch.set(self.enabled)
 
     @staticmethod
     def _ramp(a: float, b: float, n: int) -> np.ndarray:
@@ -137,7 +137,7 @@ class MicChannel:
 
         dyn = self._ramp(g_prev * c_prev, self._gate_g * self._comp_g, n)
         y = self.eq.process(m * dyn) * self.level.block(n)
-        if not isinstance(sw, float):
+        if not (isinstance(sw, float) and sw == 1.0):
             y = y * sw
 
         duck_target = self.duck_depth if (self.talkover and self._gate_open) else 1.0

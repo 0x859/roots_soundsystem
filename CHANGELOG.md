@@ -18,7 +18,7 @@ Etap 2 (w toku): nowy interfejs QML z konfigurowalnym układem.
 - Wersja w tytule okna, okno *Pomoc → O programie*, zasób wersji w EXE, autotest paczki `--selftest`.
 
 ### Poprawione
-- Moduły DSP po wyłączeniu i ponownym włączeniu odgrywały resztki sprzed wyłączenia (echo, sprężyna, pogłos miejsca, stany filtrów – przy ciszy nawet do −0,5 dBFS), a przełączanie dawało trzaski; CRASH wciśnięty przy wyłączonej sprężynie odpalał się po jej włączeniu. Teraz krótkie przenikanie i czysty stan po każdym włączeniu.
+- Moduły DSP po wyłączeniu i ponownym włączeniu odgrywały resztki sprzed wyłączenia (echo, sprężyna, pogłos miejsca, stany filtrów – przy ciszy nawet do −0,5 dBFS), a przełączanie dawało trzaski; CRASH wciśnięty przy wyłączonej sprężynie odpalał się po jej włączeniu. Teraz krótkie przenikanie i czysty stan po każdym włączeniu – z ustawieniami zmienionymi w czasie wyłączenia (czas echa i sweep preampu od razu docelowe, bez przewijania).
 - Układ kart: rzędy wypełniają szerokość (bez dziur na dużych ekranach), skala dopasowana do okna, karty same rozwijają „WIĘCEJ”, gdy jest miejsce.
 
 ### Zmienione

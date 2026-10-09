@@ -53,20 +53,18 @@ class SpringReverb:
         self._burst_pos = 0
         self._rng = np.random.default_rng(seed)
         self.crash = False
-        self.switch = Switch(fs, on_silent=self.reset)
+        self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
         self.buf.fill(0.0)
         for f in (self.pre, self.loop, self.post):
             f.reset()
         self.phase[:] = 0.0
-        self._burst = None
-        self._crash_armed = False
+        self._burst = None  # uzbrojony CRASH zostaje: mógł przyjść razem z włączeniem
         self.ret.snap()
 
     def configure(self, p) -> None:
         self.enabled = bool(p["spring.enabled"])
-        self.switch.set(self.enabled)
         self.g = 0.3 + 0.62 * float(p["spring.decay"])
         self.ret.set(float(p["spring.return"]))
         self.loop.set_sos(np.vstack([lowpass(float(p["spring.tone"]), 0.707, self.fs)] + [stretched_allpass(0.5)] * 4))
@@ -74,6 +72,7 @@ class SpringReverb:
         if crash and not self._crash_prev and self.enabled:  # CRASH przy wyłączonej sprężynie nie czeka
             self._crash_armed = True
         self._crash_prev = crash
+        self.switch.set(self.enabled)
 
     def _make_burst(self) -> np.ndarray:
         n = int(0.09 * self.fs)
@@ -89,7 +88,7 @@ class SpringReverb:
         if g is None:
             return None
         y = self._process(x, n)
-        return y if isinstance(g, float) else y * g
+        return y if isinstance(g, float) and g == 1.0 else y * g
 
     def _process(self, x: np.ndarray, n: int) -> np.ndarray:
         if self._crash_armed:

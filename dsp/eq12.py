@@ -35,7 +35,7 @@ class Equalizer:
         self._sos = np.vstack([identity() for _ in BANDS])
         self.filter = SOSFilter(self._sos, channels)
         self.preamp = Ramp(1.0, 20, fs)
-        self.switch = Switch(fs, on_silent=self.reset)
+        self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
         self.filter.reset()
@@ -43,7 +43,6 @@ class Equalizer:
 
     def configure(self, p) -> None:
         self.enabled = bool(p["eq.enabled"])
-        self.switch.set(self.enabled)
         self.preamp.set(db2lin(p["eq.preamp"]))
         sos = None
         for i, f in enumerate(BANDS):
@@ -56,6 +55,7 @@ class Equalizer:
         if sos is not None:
             self._sos = sos
             self.filter.set_sos(sos)
+        self.switch.set(self.enabled)
 
     @property
     def sos(self) -> np.ndarray:

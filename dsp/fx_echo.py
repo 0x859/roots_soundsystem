@@ -66,7 +66,7 @@ class TapeEcho:
         self.ret = Ramp(0.8, 20, fs)
         self.loop = SOSFilter(np.vstack([highpass(150, 0.707, fs), lowpass(3500, 0.707, fs)]), channels)
         self._idle = 0
-        self.switch = Switch(fs, on_silent=self.reset)
+        self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
         """Czysta taśma: bez ogona sprzed wyłączenia, czas od razu docelowy (bez „przewijania”)."""
@@ -78,7 +78,6 @@ class TapeEcho:
 
     def configure(self, p) -> None:
         self.enabled = bool(p["echo.enabled"])
-        self.switch.set(self.enabled)
         self.target_d = max(self.min_d, echo_time_ms(p) * self.fs / 1000.0)
         self.glide_s = float(p["echo.glide"]) / 1000.0
         self.fb = float(p["echo.feedback"])
@@ -86,6 +85,7 @@ class TapeEcho:
         self.wow = float(p["echo.wow"])
         self.ret.set(float(p["echo.return"]))
         self.loop.set_sos(np.vstack([highpass(float(p["echo.hp"]), 0.707, self.fs), lowpass(float(p["echo.lp"]), 0.707, self.fs)]))
+        self.switch.set(self.enabled)
 
     def process(self, x: np.ndarray) -> np.ndarray | None:
         n = len(x)
@@ -93,7 +93,7 @@ class TapeEcho:
         if g is None:
             return None
         y = self._process(x, n)
-        return y if isinstance(g, float) else y * g
+        return y if isinstance(g, float) and g == 1.0 else y * g
 
     def _process(self, x: np.ndarray, n: int) -> np.ndarray:
         k = np.arange(1, n + 1)

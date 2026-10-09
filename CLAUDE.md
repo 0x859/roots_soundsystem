@@ -38,7 +38,7 @@ Pełny plan, decyzje i stan prac: `docs/PLAN.md` (sekcja „Etap 2: rozwój”).
 ## Etap w toku: QML z konfigurowalnym układem
 - Zrobione: LIVE i KONFIGURACJA jako karty z profilu JSON, pasek padów, tryb „Edycja układu” (inspektor, przeciąganie, cofanie, profile, import/eksport). Do zrobienia – patrz `docs/PLAN.md`, sekcja „QML – stan”.
 - Układ poza edycją: `Main.qml` → `plan` (kolumny z najmniejszą liczbą pustych komórek, reszta rzędu rozdana kartom), `autoSet` (karty rozwijane automatycznie po pomiarze wysokości), skala auto `QmlTheme.set_viewport` (opcje motywu `autoScale`, `autoExpand`).
-- Moduły DSP włącza `dsp.common.Switch`: przenikanie ~15 ms, a po wyciszeniu `reset()` modułu w wątku audio (bez starych ogonów po ponownym włączeniu). Nowy moduł z `enabled` = `Switch` + `reset()` + test w `tests/test_switching.py`.
+- Moduły DSP włącza `dsp.common.Switch`: przenikanie ~15 ms, a przy ponownym włączeniu wyciszonego modułu `reset()` w wątku audio (bez starych ogonów, z ustawieniami zmienionymi w czasie wyłączenia). Nowy moduł z `enabled` = `Switch(on_reset=self.reset)` + `switch.set()` na końcu `configure` + test w `tests/test_switching.py`.
 - Podgląd QML bez okna: `QQuickWindow.setGraphicsApi(Software)` + `QT_QPA_PLATFORM=offscreen` + `QT_QPA_FONTDIR=C:/Windows/Fonts`, potem `grabFramebuffer()`.
 - Zatwierdzony kierunek wizualny: ciemny stół, złoto = tor sygnału, turkus = efekty, czerwień = kill/stop; Barlow Condensed (etykiety) + IBM Plex Mono (wartości).
 - Ekrany: LIVE (karty w siatce o liczbie kolumn zależnej od szerokości okna + pasek padów) i KONFIGURACJA (urządzenia, zwrotnica, kolumny/miejsce, EQ12, MIDI, sceny).

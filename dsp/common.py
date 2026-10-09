@@ -75,36 +75,42 @@ class Switch:
 
     `set` woła wątek sterujący (configure), `block` – wątek audio. `block(n)` zwraca None, gdy moduł
     jest wyłączony i już wyciszony (nie trzeba go liczyć), w przeciwnym razie wzmocnienie ścieżki
-    modułu: 1.0 albo tablicę (n, 1) w trakcie przenikania. Gdy wyłączony moduł się wyciszy, `block`
-    raz woła `on_silent` (reset stanu modułu) – w wątku audio, więc bez wyścigu z konfiguracją.
+    modułu: 1.0 albo tablicę (n, 1) w trakcie przenikania. Gdy wyciszony moduł zostaje włączony,
+    `block` raz woła `on_reset` (reset stanu modułu) – w wątku audio, więc bez wyścigu z konfiguracją,
+    i dopiero po wszystkich zmianach ustawień z czasu wyłączenia (czas echa, sweep od razu docelowe).
     Bez tego wyłączony moduł zamrażał bufory i filtry, a po włączeniu odgrywał resztki sprzed minut.
+    Moduł woła `set` na końcu `configure`, żeby reset widział już nowe ustawienia.
     """
 
-    def __init__(self, fs: float, on: bool = True, ms: float = SWITCH_MS, on_silent=None):
+    def __init__(self, fs: float, on: bool = True, ms: float = SWITCH_MS, on_reset=None):
         self.on = bool(on)
         self.ramp = Ramp(1.0 if self.on else 0.0, ms, fs)
-        self.on_silent = on_silent
+        self.on_reset = on_reset
         self._silent = not self.on
         self._started = False
 
     def set(self, on: bool) -> None:
-        self.on = bool(on)
+        target = 1.0 if on else 0.0
         if not self._started:  # konfiguracja przed pierwszym blokiem obowiązuje od razu, bez przenikania
-            self.ramp.snap(1.0 if self.on else 0.0)
+            self.on = bool(on)
+            self.ramp.snap(target)
             self._silent = not self.on
             return
-        self.ramp.set(1.0 if self.on else 0.0)
+        # najpierw cel rampy, potem flaga: wątek audio nie zobaczy `on` przy rampie jeszcze na 0
+        self.ramp.set(target)
+        self.on = bool(on)
 
     def block(self, n: int):
         self._started = True
         if self.on:
-            self._silent = False
+            if self._silent:
+                self._silent = False
+                if self.on_reset is not None:
+                    self.on_reset()
         elif self._silent:
             return None
         elif self.ramp.is_silent():
             self._silent = True
-            if self.on_silent is not None:
-                self.on_silent()
             return None
         return self.ramp.block(n)
 

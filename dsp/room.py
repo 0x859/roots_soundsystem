@@ -134,7 +134,7 @@ class Room:
         self._lock = threading.Lock()
         self._dry = 1.0
         self._wet = 0.0
-        self.switch = Switch(fs, on_silent=self.reset)
+        self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
         conv = self.conv
@@ -162,12 +162,12 @@ class Room:
     def configure(self, p) -> None:
         with self._lock:
             self.enabled = bool(p["room.enabled"])
-            self.switch.set(self.enabled)
             self.mix = float(p["room.mix"])
             self._dry = float(np.cos(self.mix * np.pi / 2))
             self._wet = float(np.sin(self.mix * np.pi / 2))
             if self.enabled:
                 self._rebuild(ROOM_KEYS[int(p["room.preset"])], float(p["room.size"]))
+            self.switch.set(self.enabled)
 
     def process(self, x: np.ndarray) -> np.ndarray:
         conv = self.conv
