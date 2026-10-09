@@ -64,7 +64,11 @@ class DubPanel(QWidget):
         g.addWidget(self.c("echo.return"), 3, 1)
         throw = MomentaryButton(self.bridge, "echo.throw", "THROW")
         throw.setMinimumHeight(22)
-        g.addWidget(throw, 3, 2, 1, 2)
+        g.addWidget(throw, 3, 2)
+        swell = MomentaryButton(self.bridge, "echo.swell", "SWELL")
+        swell.setMinimumHeight(22)
+        swell.setToolTip("Przytrzymaj: sprzężenie rośnie do samooscylacji, puść – wraca (klawisz W)")
+        g.addWidget(swell, 3, 3)
         return box
 
     def _spring(self):

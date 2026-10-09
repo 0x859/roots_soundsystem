@@ -53,6 +53,7 @@ class SpringReverb:
         self._burst_pos = 0
         self._rng = np.random.default_rng(seed)
         self.crash = False
+        self.held = False  # FX PANIC przytrzymany
         self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
@@ -63,6 +64,13 @@ class SpringReverb:
         self._burst = None  # uzbrojony CRASH zostaje: mógł przyjść razem z włączeniem
         self.ret.snap()
 
+    def panic(self, on: bool) -> None:
+        """FX PANIC (wątek sterujący): wyciszenie i czysty stan; przytrzymany efekt milczy."""
+        self.held = bool(on)
+        if on:
+            self.switch.flush()
+        self.switch.set(self.enabled and not self.held)
+
     def configure(self, p) -> None:
         self.enabled = bool(p["spring.enabled"])
         self.g = 0.3 + 0.62 * float(p["spring.decay"])
@@ -72,7 +80,7 @@ class SpringReverb:
         if crash and not self._crash_prev and self.enabled:  # CRASH przy wyłączonej sprężynie nie czeka
             self._crash_armed = True
         self._crash_prev = crash
-        self.switch.set(self.enabled)
+        self.switch.set(self.enabled and not self.held)
 
     def _make_burst(self) -> np.ndarray:
         n = int(0.09 * self.fs)

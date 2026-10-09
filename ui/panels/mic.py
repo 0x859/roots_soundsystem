@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QLabel
 
-from ..widgets import LevelMeter
+from ..widgets import LevelMeter, MomentaryButton
 from .base import Panel, hbox
 
 
@@ -23,7 +23,10 @@ class MicPanel(Panel):
         self.add(c("mic.level"), 4, 0)
         self.add(c("mic.echo_send"), 4, 1)
         self.add(c("mic.talkover_depth", label="Talkover"), 4, 2)
-        self.add(c("mic.talkover", label="Talkover ON"), 5, 0, 1, 3)
+        self.add(c("mic.talkover", label="Talkover ON"), 5, 0, 1, 2)
+        throw = MomentaryButton(bridge, "mic.throw", "THROW")
+        throw.setToolTip("Przytrzymaj: mikrofon w całości do echa (klawisz V)")
+        self.add(throw, 5, 2)
         self.info = QLabel("GR: 0.0 dB | latencja: —")
         self.info.setProperty("role", "caption")
         self.add(self.info, 6, 0, 1, 3)

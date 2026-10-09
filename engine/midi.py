@@ -96,6 +96,7 @@ class MidiController:
         self.last_event: tuple[str, float] | None = None
         self.revision = 0  # rośnie przy każdej zmianie mapy, profilu lub połączenia (odświeżanie podglądu)
         self._toggle_state: dict[str, bool] = {}
+        self._held: dict[str, str] = {}  # wciśnięte przyciski chwilowe: element -> cel z chwili wciśnięcia
         self._shift_held = False
         self._hw: dict[str, float] = {}  # ostatnia pozycja elementu kontrolera (0..1)
         self._latched: set[tuple[str, str]] = set()
@@ -208,6 +209,7 @@ class MidiController:
         self.pickup = profile.pickup
         self._latched.clear()
         self._toggle_state.clear()
+        self._held.clear()
         self._mark_all_leds()
         self.revision += 1
 
@@ -340,10 +342,13 @@ class MidiController:
                 self.on_learned(mid, key)
             return
         target = self.target_for(mid)
+        pressed = value >= 0.5
+        if not pressed and mid in self._held:
+            # puszczenie zwalnia cel z chwili wciśnięcia – SOLO mogło zostać puszczone lub wciśnięte w trakcie
+            target = self._held.pop(mid)
         if target is None:
             self._hw[mid] = value
             return
-        pressed = value >= 0.5
         was = self._toggle_state.get(mid, False)
         self._toggle_state[mid] = pressed
         if target in ACTIONS:
@@ -353,6 +358,8 @@ class MidiController:
         spec = self.store.specs[target]
         if spec.kind == "bool":
             if spec.momentary:
+                if pressed:
+                    self._held[mid] = target
                 self.store.set(target, pressed, source=SOURCE)
             elif pressed and not was:
                 self.store.set(target, not self.store[target], source=SOURCE)

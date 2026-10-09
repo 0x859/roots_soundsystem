@@ -65,6 +65,9 @@ todos:
   - id: features
     content: "Etap 2.5: nowe funkcje – nagrywanie setu do WAV, odtwarzacz plików, ewentualnie hostowanie VST"
     status: pending
+  - id: dub-session
+    content: "Etap 2.5: funkcje dub sesji wg docs/DUB_SESJA.md (top 5: izolator przed FX + DRY CUT, FX PANIC, SHIFT dla Rec Arm + throw mikrofonu + SWELL, nagrywanie, pady sampli) – punkty 1-3 zrobione"
+    status: in_progress
 isProject: false
 ---
 
@@ -220,10 +223,16 @@ Kolejność: najpierw porządki i testy (bezpieczna podstawa), potem poprawki DS
 - Przyrost 7 (2026-10-09): naprawa przełączania modułów DSP – wyłączony moduł zamrażał bufory i filtry, a po włączeniu odgrywał stary ogon (test `tests/test_switching.py`); `dsp.common.Switch` (przenikanie + `reset()` w wątku audio), CRASH przy wyłączonej sprężynie ignorowany. Losowe „kręcenie” wszystkimi parametrami (3000 bloków, też równolegle z wątkiem audio) nie zostawia innych śladów. Układ: plan kolumn bez dziur, skala auto, samoczynne „WIĘCEJ”. Publikacja: MIT, CI, CONTRIBUTING, `docs/`.
 - Do zrobienia: czcionki Barlow/IBM Plex w `assets/fonts`, docelowo okno w czystym QML i usunięcie Widgets.
 
+### Dub sesja (badanie 2026-10-10)
+- Pełne badanie i lista propozycji z priorytetami: `docs/DUB_SESJA.md`. Kolejność wdrożenia (top 5): 1) izolator przed FX + DRY CUT, 2) FX PANIC i wskaźnik samooscylacji, 3) warstwa SHIFT dla Rec Arm i Bank + `mic.throw` + SWELL, 4) nagrywanie setu, 5) pady sampli/dubplate'ów.
+- Zrobione (2026-10-10), punkt 1: `iso.position` (Suma / Muzyka przed efektami) – przeniesienie w wątku audio przy wyciszonym module (`Switch`: przenikanie do obejścia, przeniesienie, reset, przenikanie z powrotem), tor czyta miejsce raz na blok; sendy w pozycji „Muzyka” biorą sygnał po izolatorze (jak sendy post-fader na konsoli). `preamp.cut` (DRY CUT, rampa 5 ms na suchej muzyce w miksie, sendy bez zmian), pad i skrót `C`. Testy: `tests/test_dub.py`. Domyślnie izolator zostaje na sumie (zgodność ze scenami i dotychczasowym brzmieniem). Przypisanie DRY CUT do MIDImix – razem z warstwą SHIFT dla Rec Arm (punkt 3).
+- Zrobione (2026-10-10), punkt 2: `out.fx_panic` (FX PANIC – pad w karcie WYJŚCIE, skrót `P`, ostrzeżenie w nagłówku LIVE). `Switch.flush()`: wyciszenie, `on_reset` i powrót w wątku audio, do końca nawet przy naciśnięciu krótszym niż przenikanie; przytrzymany PANIC trzyma echo i sprężynę wyciszone (`held`). Ostrzeżenie `SignalChain.fx_hot()` (sprzężenie >= 100% albo szczyt powrotu echa >= 0,9) → `QmlSession.fxHot` → „ECHO ↑ PANIC” w `LiveHeader` (przytrzymanie = PANIC).
+- Zrobione (2026-10-10), punkt 3: warstwa SHIFT dla Rec Arm (SOLO + Rec 1/2/3/6 = FX PANIC, THROW MIC, SWELL, MONO; Rec Arm 6 bez SOLO = DRY CUT). `MidiController` pamięta cel wciśniętego przycisku chwilowego (`_held`), więc puszczenie po zmianie warstwy zwalnia ten sam parametr (inaczej PANIC/THROW zostawały wciśnięte). `mic.throw` (send mikrofonu do echa 100%, karta MIKROFON, skrót `V`), `echo.swell` (sprzężenie do `SWELL_FEEDBACK` = 1,05, karta ECHO, skrót `W`); sprzężenie echa zmienia się teraz z rampą 150 ms (`fb_gain`). SHIFT + Bank ◀/▶ zostaje wolne na rewind (P2).
+
 ### Akai MIDImix
 - Fabryczne komunikaty (kanał 1): gałki CC 16–18, 20–22, 24–26, 28–30, 46–48, 50–52, 54–56, 58–60; suwaki CC 19, 23, 27, 31, 49, 53, 57, 61; master CC 62. Mute: nuty 1, 4, … 22; Rec Arm: nuty 3, 6, … 24; Solo (trzymane) zamienia rząd Mute na nuty 2, 5, … 23; Bank Left/Right: nuty 25/26; Solo: nuta 27.
 - LED-y Mute (bursztyn) i Rec Arm (czerwone): note-on 127 zapala, 0 gasi – wymaga otwarcia portu wyjściowego MIDI (obecnie tylko wejście).
-- Mapowanie domyślne: suwaki 1–5 = izolator (sub…top), Mute 1–5 = KILL z LED; suwaki 6–8 = powrót echa, powrót sprężyny, mikrofon; master = `out.master`. Gałki: sweep/preamp/echo/sendy/syrena/mic/miejsce/echo. Rec Arm: THROW, SYRENA, CRASH, TAP, TALKOVER, MONO, pamięć syreny, MUTE. Bank L/R = poprzednia/następna scena. SOLO = SHIFT (druga warstwa gałek).
+- Mapowanie domyślne: suwaki 1–5 = izolator (sub…top), Mute 1–5 = KILL z LED; suwaki 6–8 = powrót echa, powrót sprężyny, mikrofon; master = `out.master`. Gałki: sweep/preamp/echo/sendy/syrena/mic/miejsce/echo. Rec Arm: THROW, SYRENA, CRASH, TAP, TALKOVER, DRY CUT, pamięć syreny, MUTE; SOLO + Rec Arm 1/2/3/6 = FX PANIC, THROW MIC, SWELL, MONO (od 2026-10-10; pozostałe Rec Arm w SHIFT działają jak bez SHIFT). Bank L/R = poprzednia/następna scena. SOLO = SHIFT (druga warstwa gałek i część Rec Arm).
 - Przejęcie (pickup): po zmianie sceny gałka/suwak steruje dopiero po minięciu bieżącej wartości; GUI pokazuje pozycję kontrolera.
 - Mapowanie ogólne: cel to parametr albo akcja (scena ±, tap, pamięć syreny, start/stop); profile MIDI zapisywane jak sceny; learn zostaje.
 - Zrobione (2026-10-08): `engine/midi_profiles.py` (profil MIDImix, wykrywany po nazwie portu), `engine/midi.py` (SHIFT, pickup, akcje, LED-y, format JSON v2 zgodny wstecz), menu MIDI → Profil kontrolera / Przejęcie wartości. Testy: `tests/test_midimix.py` bez sprzętu.

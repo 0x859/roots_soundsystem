@@ -3,6 +3,23 @@
 Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje według [SemVer](https://semver.org/lang/pl/).
 MINOR odpowiada etapowi planu (`docs/PLAN.md`), PATCH – poprawkom w jego obrębie. Wersja jest w `version.py`.
 
+## [Nieopublikowane]
+
+### Dodane
+- Funkcje dub sesji według badania w `docs/DUB_SESJA.md`:
+  - izolator przed efektami (`iso.position` = „Muzyka (przed efektami)”): kill tnie muzykę, a ogony echa i sprężyny, mikrofon i syrena wybrzmiewają; przeniesienie w trakcie grania bez trzasków;
+  - DRY CUT (`preamp.cut`, pad i skrót `C`): chwilowe wyciszenie suchej muzyki z zachowaniem efektów;
+  - FX PANIC (`out.fx_panic`, karta WYJŚCIE, skrót `P`): wycisza i czyści echo i sprężynę, przytrzymany trzyma je wyciszone; ostrzeżenie „ECHO ↑ PANIC” w nagłówku LIVE, gdy echo się rozkręca;
+  - THROW MIC (`mic.throw`, skrót `V`): chwilowo cały mikrofon do echa; SWELL (`echo.swell`, skrót `W`): przytrzymanie podnosi sprzężenie do samooscylacji;
+  - MIDImix: SOLO + Rec Arm 1/2/3/6 = FX PANIC, THROW MIC, SWELL, MONO.
+
+### Zmienione
+- MIDImix: Rec Arm 6 to teraz DRY CUT (MONO przeniesione na SOLO + Rec Arm 6).
+- Sprzężenie echa zmienia się płynnie (rampa 150 ms) – także przy kręceniu gałką.
+
+### Poprawione
+- Przycisk chwilowy na kontrolerze puszczony po zmianie warstwy SHIFT (SOLO puszczone lub wciśnięte w trakcie) zwalnia ten sam parametr, zamiast zostawić go włączonego.
+
 ## [0.2.0] – 2026-10-09
 
 Etap 2 (w toku): nowy interfejs QML z konfigurowalnym układem.

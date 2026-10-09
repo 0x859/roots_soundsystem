@@ -51,6 +51,7 @@ class QmlSession(QObject):
     eqPresetsChanged = Signal()
     sirenPresetsChanged = Signal()
     dspChanged = Signal()
+    fxHotChanged = Signal()
     toast = Signal(str)
     revealCard = Signal(str)  # przewiń do karty zawierającej kontrolkę o tym celu (np. "view:midi_map")
 
@@ -72,6 +73,7 @@ class QmlSession(QObject):
         self._pickup: dict[str, float] = {}
         self._presets: dict[str, list[dict]] = {"eq": [], "siren": []}
         self._dsp = (0, 0)
+        self._fx_hot = False
         self.midi_lookup = lambda _key: ""
         self.memory_lookup = lambda _i: False
 
@@ -168,6 +170,11 @@ class QmlSession(QObject):
     def dspTotal(self) -> int:
         return self._dsp[1]
 
+    @Property(bool, notify=fxHotChanged)
+    def fxHot(self) -> bool:
+        """Echo się rozkręca (sprzężenie >= 100% albo powrót blisko przesterowania) – czas na FX PANIC."""
+        return self._fx_hot
+
     # --- aktualizacje z okna głównego ---
     def set_presets(self, kind: str, presets: list[tuple[str, bool]]) -> None:
         """Lista presetów rodzaju „eq” lub „siren” (patrz `presets.store.PRESET_KINDS`)."""
@@ -180,6 +187,11 @@ class QmlSession(QObject):
         if (on, total) != self._dsp:
             self._dsp = (on, total)
             self.dspChanged.emit()
+
+    def set_fx_hot(self, hot: bool) -> None:
+        if bool(hot) != self._fx_hot:
+            self._fx_hot = bool(hot)
+            self.fxHotChanged.emit()
 
     def set_devices(self, info: dict[str, Any]) -> None:
         if info != self._devices:

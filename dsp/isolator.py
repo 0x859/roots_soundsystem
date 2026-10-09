@@ -21,10 +21,13 @@ SPLITS = (
     ("iso.f4", "Podział high-mid/top", 5000.0, 3000.0, 12000.0),
 )
 KILL_RAMP_MS = 5.0
+# Suma: kill tnie wszystko (z ogonami echa, MC i syreną); Muzyka: tylko muzykę przed sendami – ogony wybrzmiewają
+POSITIONS = ("Suma (po efektach)", "Muzyka (przed efektami)")
 
 PARAMS = [
     ParamSpec("iso.enabled", "Izolator", True, kind="bool"),
     ParamSpec("iso.slope", "Nachylenie", 1, kind="choice", choices=SLOPES),
+    ParamSpec("iso.position", "Miejsce w torze", 0, kind="choice", choices=POSITIONS),
 ] + [ParamSpec(k, lbl, d, lo, hi, "Hz", scale="log") for k, lbl, d, lo, hi in SPLITS]
 for _b in BANDS:
     PARAMS.append(ParamSpec(f"iso.g.{_b}", BAND_LABELS[_b], 0.0, KILL_DB, 6.0, "dB", step=0.5, kill_floor=KILL_DB))
@@ -40,6 +43,11 @@ class Isolator:
         self.splitter = BandSplitter(fs, [s[2] for s in SPLITS], self.order, channels)
         self.gains = [Ramp(1.0, KILL_RAMP_MS, fs) for _ in BANDS]
         self.switch = Switch(fs, on_reset=self.reset)
+        # miejsce w torze: `pre` ustawia wątek sterujący, `active_pre` zmienia wątek audio, gdy moduł
+        # jest wyciszony (przenikanie do obejścia, przeniesienie, czysty stan i przenikanie z powrotem)
+        self.pre = False
+        self.active_pre = False
+        self._running = False
 
     def reset(self) -> None:
         self.splitter.reset()
@@ -58,12 +66,22 @@ class Isolator:
         for ramp, b in zip(self.gains, BANDS, strict=True):
             g = 0.0 if p[f"iso.kill.{b}"] else gain_from_db(float(p[f"iso.g.{b}"]), KILL_DB)
             ramp.set(g)
-        self.switch.set(self.enabled)
+        self.pre = int(p["iso.position"]) == 1
+        if not self._running:
+            self.active_pre = self.pre
+        self.switch.set(self.enabled and self.pre == self.active_pre)
 
     def process(self, x: np.ndarray) -> np.ndarray:
+        """Tor woła `process` tylko w miejscu `active_pre` odczytanym na początku bloku."""
+        self._running = True
         n = len(x)
         sw = self.switch.block(n)
         if sw is None:
+            # wyciszony: tu (wątek audio) przenosimy moduł; włączenie po przeniesieniu też tutaj, więc
+            # wyłączenie z wątku sterującego, które minęło się z przeniesieniem, samo się naprawia
+            self.active_pre = self.pre
+            if self.enabled:
+                self.switch.set(True)
             return x
         return crossfade(x, self._process(x, n), sw)
 

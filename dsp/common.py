@@ -88,6 +88,7 @@ class Switch:
         self.on_reset = on_reset
         self._silent = not self.on
         self._started = False
+        self._flush = False
 
     def set(self, on: bool) -> None:
         target = 1.0 if on else 0.0
@@ -96,12 +97,34 @@ class Switch:
             self.ramp.snap(target)
             self._silent = not self.on
             return
+        if self._flush:  # czyszczenie w toku: rampę prowadzi `block`, po resecie wróci do `on`
+            self.on = bool(on)
+            return
         # najpierw cel rampy, potem flaga: wątek audio nie zobaczy `on` przy rampie jeszcze na 0
         self.ramp.set(target)
         self.on = bool(on)
 
+    def flush(self) -> None:
+        """Wyciszenie, czysty stan (`on_reset`) i powrót – np. FX PANIC na rozkręconym echu.
+
+        Działa do końca nawet wtedy, gdy zaraz po nim przyjdzie `set(True)` (naciśnięcie krótsze niż
+        przenikanie). Przed pierwszym blokiem nie ma czego czyścić.
+        """
+        if not self._started:
+            return
+        self._flush = True
+        self.ramp.set(0.0)
+
     def block(self, n: int):
         self._started = True
+        if self._flush:
+            if not self.ramp.is_silent():
+                self.ramp.set(0.0)  # `set` z wątku sterującego mógł się minąć z `flush`
+                return self.ramp.block(n)
+            self._flush = False
+            self._silent = True  # ponowne włączenie poniżej woła `on_reset`
+            if self.on:
+                self.ramp.set(1.0)
         if self.on:
             if self._silent:
                 self._silent = False

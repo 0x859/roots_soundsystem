@@ -20,6 +20,8 @@ Mikrofon ─► kanał MC ───┤     │                                  
 Syrena ─────────────────┘     └─► send / throw ─► echo taśmowe, sprężyna
 ```
 
+Izolator może też stać tuż za preampem (KONFIGURACJA → IZOLATOR – PODZIAŁ → *Miejsce w torze* = „Muzyka (przed efektami)”). Wtedy kill tnie tylko muzykę i to, co idzie do echa i sprężyny, a ogony efektów, mikrofon i syrena grają dalej – tak jak wyciszenie kanału na konsoli dubowej. Przeniesienie w trakcie grania robi krótkie przenikanie (ok. 30 ms).
+
 ## Instalacja
 
 1. Windows 10/11 i Python 3.11+ (testowane na 3.14).
@@ -105,9 +107,12 @@ Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = t
 ### Wspólne dla obu interfejsów
 
 - **Pokrętła**: przeciąganie w pionie lub kółko myszy, Shift = precyzyjnie, dwuklik = wartość domyślna.
-- **Przyciski chwilowe** (THROW, SYRENA, CRASH, KILL): lewy przycisk = aktywny przy przytrzymaniu, prawy = zatrzaśnięcie.
-- **Skróty** (domyślne, zmienialne w trybie ✎ UKŁAD): `1`-`5` kill pasm izolatora, `Spacja` throw echa, `S` syrena, `D` crash sprężyny, `T` tap tempo, `M` mute, `F5`-`F8` pamięci syreny (Ctrl+klik na M1-M4 zapisuje). W trybie edycji układu skróty są wyłączone.
-- **Pasek LIVE** (stół klasyczny): START/STOP, sceny, kill 1-5, THROW, SYRENA, CRASH, sweep HP/LP, master, mute i mierniki – zawsze na górze okna.
+- **Przyciski chwilowe** (THROW, DRY CUT, SWELL, THROW MIC, FX PANIC, SYRENA, CRASH, KILL): lewy przycisk = aktywny przy przytrzymaniu, prawy = zatrzaśnięcie.
+- **DRY CUT**: wycisza suchą muzykę (rampa 5 ms), a echo, sprężyna, mikrofon i syrena grają dalej – „drop do echa”; razem z THROW daje gest „throw & cut”.
+- **SWELL** (karta ECHO): przytrzymanie podnosi sprzężenie echa do samooscylacji (płynnie), puszczenie przywraca ustawienie. **THROW MIC** (karta MIKROFON): przytrzymanie wysyła cały mikrofon do echa – ostatnie słowo MC wraca echem.
+- **FX PANIC** (karta WYJŚCIE, klawisz `P`): wycisza i czyści echo i sprężynę (czysta taśma); przytrzymany trzyma je wyciszone. Gdy echo samo się rozkręca (sprzężenie ≥ 100% albo powrót blisko przesterowania), nagłówek LIVE pulsuje czerwonym **ECHO ↑ PANIC** – przytrzymanie tego napisu działa jak FX PANIC.
+- **Skróty** (domyślne, zmienialne w trybie ✎ UKŁAD): `1`-`5` kill pasm izolatora, `Spacja` throw echa, `C` dry cut, `W` swell, `V` throw mikrofonu, `P` FX panic, `S` syrena, `D` crash sprężyny, `T` tap tempo, `M` mute, `F5`-`F8` pamięci syreny (Ctrl+klik na M1-M4 zapisuje). W trybie edycji układu skróty są wyłączone.
+- **Pasek LIVE** (stół klasyczny): START/STOP, sceny, kill 1-5, THROW, DRY CUT, SYRENA, CRASH, FX PANIC, sweep HP/LP, master, mute i mierniki – zawsze na górze okna.
 - **Stół klasyczny**: dwa rzędy bez poziomego paska narzędzi; wykresy są w pierwszym rzędzie po prawej. Przy mniejszym oknie stół skaluje się (dolna granica 0.7).
 - **Sceny** (pasek LIVE): pełny stan toru; wbudowane: Neutralny, Roots warm, Steppers heavy, Dub echo chamber, Plener, Słuchawki (bass feel). Własne sceny i presety są zapisywane jako JSON w `%APPDATA%\RootsSoundsystem\` (`scenes\`, `eq\`, `siren\`).
 - **Presety EQ** (karta EQ 12 pasm / panel EQ): m.in. Flat, Dub (sub i dół), Steppers, Lovers rock, Plener, Mała i Duża sala, Winyl, Ochrona góry, Stare nagranie, Radio/telefon. Wybór od razu ustawia pasma; własne oznaczone gwiazdką.
@@ -117,7 +122,7 @@ Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = t
 - **Własna IR miejsca**: panel *Kolumny i miejsce* → *Wczytaj IR…*; plik jest resamplowany do częstotliwości pracy.
 - **MIDI**: menu MIDI → wybór portu → *Tryb learn*: porusz kontrolką w aplikacji, a potem elementem kontrolera. Przyciski/nuty sterują przyciskami chwilowymi i przełącznikami, CC – pokrętłami.
 - **Akai MIDImix**: podłączony kontroler jest wykrywany sam (także po odłączeniu i ponownym podłączeniu oraz gdy Windows zmieni numer portu) i dostaje gotowy profil. Wybór „— bez kontrolera —” wyłącza automatyczne łączenie.
-- **Mapa kontrolera** (KONFIGURACJA → *MIDI – KONTROLER*, menu *MIDI → Podgląd mapy kontrolera…* albo przycisk **MIDI** w nagłówku): rysunek MIDImix z podpisem każdej gałki, suwaka i przycisku (moduł + parametr), wartościami na żywo, diodami MUTE/REC ARM i podświetleniem elementu, którym właśnie ruszasz. Kropka na gałce i czerwona kreska na suwaku pokazują położenie elementu, który czeka na przejęcie wartości. Przełącznik **NORMAL / SHIFT (SOLO)** pokazuje drugą warstwę (włącza się sam, gdy trzymasz SOLO; elementy bez własnego przypisania w SHIFT są przygaszone). Kliknięcie elementu otwiera edycję: przypisanie w obu warstwach, **USUŃ** i wyszukiwarka parametrów i akcji (m.in. DSP on/off, pamięci syreny M1–M4, sceny, tap). Dalej: port, profil, LEARN, PRZEJĘCIE, **EKSPORT/IMPORT** mapy (JSON) i WYCZYŚĆ. Przypisania spoza mapy (np. z learn na innym kontrolerze) są na liście pod rysunkiem. Nagłówek LIVE pokazuje stan: kropka = połączony, „MIDI · SHIFT” = trzymane SOLO.
+- **Mapa kontrolera** (KONFIGURACJA → *MIDI – KONTROLER*, menu *MIDI → Podgląd mapy kontrolera…* albo przycisk **MIDI** w nagłówku): rysunek MIDImix z podpisem każdej gałki, suwaka i przycisku (moduł + parametr), wartościami na żywo, diodami MUTE/REC ARM i podświetleniem elementu, którym właśnie ruszasz. Kropka na gałce i czerwona kreska na suwaku pokazują położenie elementu, który czeka na przejęcie wartości. Przełącznik **NORMAL / SHIFT (SOLO)** pokazuje drugą warstwę (włącza się sam, gdy trzymasz SOLO; elementy bez własnego przypisania w SHIFT są przygaszone). Kliknięcie elementu otwiera edycję: przypisanie w obu warstwach, **USUŃ** i wyszukiwarka parametrów i akcji (m.in. DSP on/off, pamięci syreny M1–M4, sceny, tap). Dalej: port, profil, LEARN, PRZEJĘCIE, **EKSPORT/IMPORT** mapy (JSON) i WYCZYŚĆ. Przypisania spoza mapy (np. z learn na innym kontrolerze) są na liście pod rysunkiem. Nagłówek LIVE pokazuje stan: kropka = połączony, „MIDI · SHIFT” = trzymane SOLO. Gesty dubowe na MIDImix: Rec Arm 6 = DRY CUT, SOLO + Rec Arm 1/2/3/6 = FX PANIC, THROW MIC, SWELL, MONO.
 - Zamknięcie okna kończy program; minimalizacja chowa go do zasobnika (można wyłączyć w menu Audio).
 
 ## Struktura

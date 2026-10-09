@@ -20,9 +20,17 @@ OUT_PARAMS = [
     ParamSpec("out.master", "Master", 0.0, -60.0, 6.0, "dB", step=0.5),
     ParamSpec("out.mute", "Mute", False, kind="bool", scene=False),
     ParamSpec("out.limit", "Limiter master", -0.5, -12.0, 0.0, "dB", step=0.1),
+    # bezpieczeństwo: wycisza i czyści echo i sprężynę (rozkręcona pętla na prawdziwym systemie)
+    ParamSpec("out.fx_panic", "FX panic", False, kind="bool", momentary=True, scene=False),
 ] + [ParamSpec(f"out.limit.{w}", f"Limiter {WAY_LABELS[w]}", -1.0, -24.0, 0.0, "dB", step=0.1) for w in ALL_WAYS]
 
-SEND_KEYS = ("preamp.echo_send", "preamp.spring_send", "echo.throw", "mic.echo_send", "siren.echo_send")
+SEND_KEYS = (
+    "preamp.echo_send", "preamp.spring_send", "preamp.cut", "echo.throw",
+    "mic.echo_send", "mic.throw", "siren.echo_send",
+)
+DRY_CUT_MS = 5.0
+FX_HOT_FEEDBACK = 1.0  # sprzężenie echa, od którego pętla sama się rozkręca
+FX_HOT_PEAK = 0.9  # powrót echa blisko przesterowania
 
 
 def all_specs() -> list[ParamSpec]:
@@ -111,6 +119,7 @@ class SignalChain:
 
         self.send_echo = Ramp(0.0, 10, fs)
         self.send_spring = Ramp(0.0, 10, fs)
+        self.dry = Ramp(1.0, DRY_CUT_MS, fs)  # DRY CUT: sucha muzyka w miksie (sendy zostają)
         self.mic_echo_send = 0.3
         self.siren_echo_send = 0.6
         self.master = Ramp(1.0, 20, fs)
@@ -124,6 +133,7 @@ class SignalChain:
         self.taps = {w: Tap() for w in ALL_WAYS}
         self.mic_level_db = -120.0
         self.clip = False
+        self._panic = False
 
         for mod in self.modules.values():
             mod.configure(params)
@@ -157,7 +167,8 @@ class SignalChain:
             send = 1.0
         self.send_echo.set(send)
         self.send_spring.set(float(p["preamp.spring_send"]))
-        self.mic_echo_send = float(p["mic.echo_send"])
+        self.dry.set(0.0 if p["preamp.cut"] else 1.0)
+        self.mic_echo_send = 1.0 if p["mic.throw"] else float(p["mic.echo_send"])
         self.siren_echo_send = float(p["siren.echo_send"])
 
     def _configure_out(self, p) -> None:
@@ -165,6 +176,18 @@ class SignalChain:
         self.master_limiter.set_threshold_db(float(p["out.limit"]))
         for w in ALL_WAYS:
             self.limiters[w].set_threshold_db(float(p[f"out.limit.{w}"]))
+        panic = bool(p["out.fx_panic"])
+        if panic != self._panic:
+            self._panic = panic
+            self.echo.panic(panic)
+            self.spring.panic(panic)
+
+    def fx_hot(self) -> bool:
+        """Echo samo się rozkręca albo jego powrót dochodzi do przesterowania (ostrzeżenie dla GUI)."""
+        echo = self.echo
+        if not echo.enabled or echo.held:
+            return False
+        return echo.fb >= FX_HOT_FEEDBACK or echo.peak >= FX_HOT_PEAK
 
     # --- audio ---
     def process(self, music: np.ndarray, mic_in: np.ndarray | None = None) -> np.ndarray:
@@ -189,9 +212,13 @@ class SignalChain:
         self.mic_level_db = self.mic.level_db
         if not (isinstance(duck, float) and duck == 1.0):
             x = x * duck
+        # izolator przed efektami: kill tnie muzykę i to, co idzie do sendów, a ogony, MC i syrena zostają
+        iso_pre = self.iso.active_pre  # raz na blok – przeniesienie obowiązuje od następnego
+        if iso_pre:
+            x = self.iso.process(x)
         siren = self.siren.process(n)
 
-        mix = x.copy()
+        mix = x * self.dry.block(n)
         echo_in = x * self.send_echo.block(n)
         if mic_sig is not None:
             mix += mic_sig
@@ -209,7 +236,8 @@ class SignalChain:
             mix += s
 
         mix = self.eq.process(mix)
-        mix = self.iso.process(mix)
+        if not iso_pre:
+            mix = self.iso.process(mix)
         ways = self.xo.process(mix)
         for w, y in ways.items():
             self.taps[w].push(y)

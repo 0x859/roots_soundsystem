@@ -20,6 +20,8 @@ MIN_MS = 20.0
 MAX_MS = 1500.0
 WOW_HZ, WOW_MS = 0.55, 2.0
 FLUTTER_HZ, FLUTTER_MS = 7.3, 0.12
+SWELL_FEEDBACK = 1.05  # SWELL: pętla powoli się rozkręca (tanh w pętli i limiter trzymają poziom)
+FEEDBACK_RAMP_MS = 150.0
 
 PARAMS = [
     ParamSpec("echo.enabled", "Echo", True, kind="bool"),
@@ -34,6 +36,7 @@ PARAMS = [
     ParamSpec("echo.glide", "Bezwładność", 250.0, 10.0, 2000.0, "ms", scale="log"),
     ParamSpec("echo.return", "Powrót", 0.8, 0.0, 1.5, "%"),
     ParamSpec("echo.throw", "Throw", False, kind="bool", momentary=True, scene=False),
+    ParamSpec("echo.swell", "Swell", False, kind="bool", momentary=True, scene=False),
 ]
 
 
@@ -58,7 +61,8 @@ class TapeEcho:
         self.target_d = 375.0 * fs / 1000.0
         self.d = self.target_d
         self.glide_s = 0.25
-        self.fb = 0.55
+        self.fb = 0.55  # docelowe sprzężenie (z SWELL)
+        self.fb_gain = Ramp(0.55, FEEDBACK_RAMP_MS, fs)
         self.drive_k = 1.9
         self.wow = 0.25
         self.ph_wow = 0.0
@@ -66,6 +70,8 @@ class TapeEcho:
         self.ret = Ramp(0.8, 20, fs)
         self.loop = SOSFilter(np.vstack([highpass(150, 0.707, fs), lowpass(3500, 0.707, fs)]), channels)
         self._idle = 0
+        self.held = False  # FX PANIC przytrzymany
+        self.peak = 0.0  # szczyt powrotu z ostatniego bloku (ostrzeżenie o samooscylacji)
         self.switch = Switch(fs, on_reset=self.reset)
 
     def reset(self) -> None:
@@ -75,22 +81,35 @@ class TapeEcho:
         self.d = self.target_d
         self.ph_wow = self.ph_flut = 0.0
         self.ret.snap()
+        self.fb_gain.snap()
+        self.peak = 0.0
+
+    def panic(self, on: bool) -> None:
+        """FX PANIC (wątek sterujący): wyciszenie i czysty stan; przytrzymany efekt milczy."""
+        self.held = bool(on)
+        if on:
+            self.switch.flush()
+        self.switch.set(self.enabled and not self.held)
 
     def configure(self, p) -> None:
         self.enabled = bool(p["echo.enabled"])
         self.target_d = max(self.min_d, echo_time_ms(p) * self.fs / 1000.0)
         self.glide_s = float(p["echo.glide"]) / 1000.0
         self.fb = float(p["echo.feedback"])
+        if p["echo.swell"]:
+            self.fb = max(self.fb, SWELL_FEEDBACK)
+        self.fb_gain.set(self.fb)
         self.drive_k = 1.0 + 3.0 * float(p["echo.drive"])
         self.wow = float(p["echo.wow"])
         self.ret.set(float(p["echo.return"]))
         self.loop.set_sos(np.vstack([highpass(float(p["echo.hp"]), 0.707, self.fs), lowpass(float(p["echo.lp"]), 0.707, self.fs)]))
-        self.switch.set(self.enabled)
+        self.switch.set(self.enabled and not self.held)
 
     def process(self, x: np.ndarray) -> np.ndarray | None:
         n = len(x)
         g = self.switch.block(n)
         if g is None:
+            self.peak = 0.0
             return None
         y = self._process(x, n)
         return y if isinstance(g, float) and g == 1.0 else y * g
@@ -115,8 +134,10 @@ class TapeEcho:
         b = self.buf[(i0 + 1) & self.mask]
         wet = a + (b - a) * frac
         fb = self.loop.process(wet)
-        fb = np.tanh(self.drive_k * self.fb * fb) / self.drive_k
+        fb = np.tanh(self.drive_k * self.fb_gain.block(n) * fb) / self.drive_k
         idx = (self.w + np.arange(n)) & self.mask
         self.buf[idx] = np.tanh(x * 0.9) / 0.9 + fb
         self.w = (self.w + n) & self.mask
-        return wet * self.ret.block(n)
+        y = wet * self.ret.block(n)
+        self.peak = float(np.max(np.abs(y)))
+        return y

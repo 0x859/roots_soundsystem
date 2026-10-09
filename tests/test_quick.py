@@ -260,6 +260,12 @@ def test_session_meters_and_status(app):
     assert 0 < s.property("levels")[0] < levels[0]  # łagodne opadanie
     s.set_status(["SYMULACJA"], "12%")
     assert s.property("chips") == ["SYMULACJA"] and s.property("cpu") == "12%"
+    hot = []
+    s.fxHotChanged.connect(lambda: hot.append(s.property("fxHot")))
+    s.set_fx_hot(True)
+    s.set_fx_hot(True)
+    s.set_fx_hot(False)
+    assert hot == [True, False]
     s.set_scenes(["A", "B"], "B")
     assert s.property("scene") == "B"
     s.setProperty("screen", "config")
@@ -449,6 +455,9 @@ def test_qml_loads_and_runs_without_warnings(app, desk, layout, store):
         session = desk.session
         store.set("iso.kill.top", True)
         session.set_meters(_Chain())
+        session.set_fx_hot(True)  # ostrzeżenie ECHO ↑ PANIC w nagłówku
+        _pump(app)
+        session.set_fx_hot(False)
         session.setProperty("screen", "config")
         _pump(app)
         session.setProperty("screen", "live")

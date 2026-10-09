@@ -43,7 +43,7 @@ def test_profile_targets_exist(store):
         for mid, target in layer.items():
             assert target in store.specs or target in ACTIONS, f"{mid} -> {target}"
     assert len(p.mapping) == 24 + 9 + 16 + 2
-    assert len(p.shift_mapping) == 24 + 8
+    assert len(p.shift_mapping) == 24 + 8 + 4  # gałki, rząd Mute przy SOLO, Rec Arm 1-3 i 6
     assert len(p.feedback) == 16
 
 
@@ -270,3 +270,41 @@ def test_ensure_connected_auto_detects_known_controller(store, monkeypatch):
     m2 = MidiController(store)
     m2.backend = "fake"
     assert m2.ensure_connected("") is False  # pusty = świadomie „bez kontrolera”
+
+
+def test_shift_layer_on_rec_arm(mix, store):
+    """SOLO + Rec Arm: FX PANIC, THROW MIC, SWELL, MONO; bez SOLO Rec Arm 6 to DRY CUT."""
+    fired = []
+    mix.on_action = fired.append
+    mix.handle(note(27, True))  # SOLO = SHIFT
+    mix.handle(note(3, True))
+    assert store["out.fx_panic"] is True and store["echo.throw"] is False
+    mix.handle(note(3, False))
+    assert store["out.fx_panic"] is False
+    for n, key in ((6, "mic.throw"), (9, "echo.swell")):
+        mix.handle(note(n, True))
+        assert store[key] is True
+        mix.handle(note(n, False))
+        assert store[key] is False
+    mix.handle(note(18, True))
+    mix.handle(note(18, False))
+    assert store["preamp.mono"] is True and store["preamp.cut"] is False
+    mix.handle(note(12, True))  # Rec Arm 4 bez własnej warstwy SHIFT: dalej TAP
+    assert fired == ["action:tap"]
+    mix.handle(note(12, False))
+    mix.handle(note(27, False))
+    mix.handle(note(18, True))
+    assert store["preamp.cut"] is True
+    mix.handle(note(18, False))
+    assert store["preamp.cut"] is False and store["preamp.mono"] is True
+
+
+@pytest.mark.parametrize("shift_first", [True, False])
+def test_momentary_released_in_other_layer(mix, store, shift_first):
+    """Puszczenie przycisku chwilowego po zmianie warstwy (SOLO puszczone lub wciśnięte w trakcie) zwalnia ten sam cel."""
+    if shift_first:
+        mix.handle(note(27, True))
+    mix.handle(note(3, True))
+    mix.handle(note(27, not shift_first))
+    mix.handle(note(3, False))
+    assert store["out.fx_panic"] is False and store["echo.throw"] is False

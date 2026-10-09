@@ -50,7 +50,9 @@ def test_strips_describe_mapping(qmidi):
     mute = _element(qmidi, "note:0:1")
     assert mute["sid"] == "note:0:2" and mute["normal"]["tone"] == "kill" and mute["normal"]["bool"]
     rec = _element(qmidi, "note:0:3")
-    assert not rec["shiftOwn"] and rec["shift"]["target"] == "echo.throw"  # w SHIFT działa jak bez SHIFT
+    assert rec["shiftOwn"] and rec["shift"]["target"] == "out.fx_panic"
+    tap = _element(qmidi, "note:0:12")
+    assert not tap["shiftOwn"] and tap["shift"]["target"] == "action:tap"  # w SHIFT działa jak bez SHIFT
     solo = _element(qmidi, "note:0:27")
     assert solo["isShift"]
     assert qmidi.property("others") == []

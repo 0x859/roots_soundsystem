@@ -28,6 +28,8 @@ PARAMS = [
     ParamSpec("preamp.echo_send", "Send echo", 0.0, 0.0, 1.0, "%"),
     ParamSpec("preamp.spring_send", "Send spring", 0.0, 0.0, 1.0, "%"),
     ParamSpec("preamp.master", "Master preamp", 0.0, -24.0, 12.0, "dB", step=0.5),
+    # gest dubowy: wycisza suchą muzykę w miksie, sendy do echa i sprężyny zostają (obsługa w SignalChain)
+    ParamSpec("preamp.cut", "Dry cut", False, kind="bool", momentary=True, scene=False),
 ]
 
 

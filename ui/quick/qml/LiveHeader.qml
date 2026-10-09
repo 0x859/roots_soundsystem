@@ -142,7 +142,8 @@ Rectangle {
         y: root.fits ? root.pad + (left.height - height) / 2 : left.y + left.height + root.gap
         width: root.fits ? implicitW : root.width - 2 * root.pad
         spacing: 8 * root.s
-        readonly property real implicitW: chips.implicitWidth + midi.width + dsp.width + nav.implicitWidth + tools.implicitWidth + 4 * spacing
+        readonly property real implicitW: chips.implicitWidth + (fx.visible ? fx.width + spacing : 0) + midi.width + dsp.width
+                                          + nav.implicitWidth + tools.implicitWidth + 4 * spacing
 
         Row {
             id: chips
@@ -182,6 +183,47 @@ Rectangle {
                     color: Qt.darker(Theme.text, 1.12)
                     font.family: Theme.valueFont
                     font.pixelSize: Math.round(13 * root.s)
+                }
+            }
+        }
+
+        // echo się rozkręca: ostrzeżenie, przytrzymanie = FX PANIC (wyciszenie i czysta taśma)
+        Item {
+            id: fx
+            visible: Session.fxHot
+            width: fxBox.width
+            height: 48 * root.s
+            Rectangle {
+                id: fxBox
+                anchors.verticalCenter: parent.verticalCenter
+                width: fxText.implicitWidth + 24 * root.s
+                height: 40 * root.s
+                radius: 8 * root.s
+                color: fxArea.pressed ? Theme.kill : Qt.rgba(0.85, 0.2, 0.2, 0.22)
+                border.color: Theme.kill
+                SequentialAnimation on opacity {
+                    running: fx.visible && !fxArea.pressed
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.55; duration: 450 }
+                    NumberAnimation { to: 1.0; duration: 450 }
+                    onRunningChanged: if (!running) fxBox.opacity = 1.0
+                }
+                Text {
+                    id: fxText
+                    anchors.centerIn: parent
+                    text: "ECHO ↑ PANIC"
+                    color: "#FFFFFF"
+                    font.family: Theme.labelFont
+                    font.weight: Font.Bold
+                    font.pixelSize: Math.round(15 * root.s)
+                    font.letterSpacing: 1.2
+                }
+                MouseArea {
+                    id: fxArea
+                    anchors.fill: parent
+                    onPressed: Params.get("out.fx_panic").setValue(true)
+                    onReleased: Params.get("out.fx_panic").setValue(false)
+                    onCanceled: Params.get("out.fx_panic").setValue(false)
                 }
             }
         }

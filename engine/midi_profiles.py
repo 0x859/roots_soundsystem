@@ -107,8 +107,10 @@ def _midimix() -> MidiProfile:
     ]
     recs = [
         "echo.throw", "siren.trigger", "spring.crash", "action:tap",
-        "mic.talkover", "preamp.mono", "action:siren_mem_next", "out.mute",
+        "mic.talkover", "preamp.cut", "action:siren_mem_next", "out.mute",
     ]
+    # SOLO + Rec Arm (bez wpisu = jak bez SOLO): gesty dubowe i MONO przeniesione spod Rec Arm 6
+    shift_recs = {0: "out.fx_panic", 1: "mic.throw", 2: "echo.swell", 5: "preamp.mono"}
     mapping: dict[str, str] = {}
     shift_mapping: dict[str, str] = {}
     for ccs, keys, skeys in zip(_MIX_KNOBS, knobs, shift_knobs, strict=True):
@@ -125,6 +127,8 @@ def _midimix() -> MidiProfile:
         shift_mapping[_note(n)] = key
     for n, key in zip(_MIX_REC, recs, strict=True):
         mapping[_note(n)] = key
+    for i, key in shift_recs.items():
+        shift_mapping[_note(_MIX_REC[i])] = key
     mapping[_note(_MIX_BANK_LEFT)] = "action:scene_prev"
     mapping[_note(_MIX_BANK_RIGHT)] = "action:scene_next"
     return MidiProfile(

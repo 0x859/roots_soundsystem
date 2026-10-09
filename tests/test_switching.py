@@ -159,3 +159,66 @@ def test_reenabled_module_starts_at_current_settings(store, switch, changes, sta
     _run(chain, 1)
     cur, target = state(chain)
     assert cur == pytest.approx(target)
+
+
+def test_flush_mid_fade_and_disable_keep_switch_consistent():
+    """FX PANIC w trakcie przenikania i wyłączenie w trakcie czyszczenia: moduł kończy wyłączony, bez resetu."""
+    resets = []
+    s = Switch(FS, on_reset=lambda: resets.append(1))
+    s.block(B)
+    s.set(False)
+    s.block(B)  # w połowie wyciszania
+    s.flush()
+    s.set(False)
+    for _ in range(5):
+        g = s.block(B)
+    assert g is None and not resets
+    s.set(True)
+    s.block(B)
+    assert resets == [1]
+
+
+def test_flush_restarts_enabled_switch_once():
+    resets = []
+    s = Switch(FS, on_reset=lambda: resets.append(1))
+    s.block(B)
+    s.flush()
+    gains = [s.block(B) for _ in range(8)]
+    assert any(isinstance(g, np.ndarray) for g in gains) and gains[-1] == 1.0
+    assert resets == [1]
+
+
+@pytest.mark.parametrize("name", ["echo", "spring"])
+def test_fx_panic_short_press_clears_tail(store, name):
+    """FX PANIC krótszy niż przenikanie (wciśnięcie i puszczenie przed blokiem audio) i tak czyści ogon."""
+    chain = _chain(store, {f"{name}.enabled": True} | CASES[f"{name}.enabled"])
+    _run(chain, 200)
+    store.set("out.fx_panic", True)
+    store.set("out.fx_panic", False)
+    _run(chain, 20, level=0.0)  # przenikanie do ciszy, reset, powrót i wygaśnięcie filtrów zwrotnicy
+    assert np.max(np.abs(_run(chain, 40, level=0.0))) < 1e-4  # bez czyszczenia ogon byłby o rzędy większy
+    _run(chain, 50)
+    assert np.max(np.abs(_run(chain, 20, level=0.0))) > 0.01  # efekt dalej działa
+
+
+@pytest.mark.parametrize("name", ["echo", "spring"])
+def test_fx_panic_hold_keeps_effect_silent(store, name):
+    chain = _chain(store, {f"{name}.enabled": True} | CASES[f"{name}.enabled"])
+    _run(chain, 100)
+    store.set("out.fx_panic", True)
+    _run(chain, 4)
+    mod = getattr(chain, name)
+    x = 0.3 * np.random.default_rng(3).standard_normal((B, 2))
+    assert all(mod.process(x) is None for _ in range(20))  # trzymany: efekt milczy mimo sygnału
+    store.set("out.fx_panic", False)
+    assert store["echo.enabled" if name == "echo" else "spring.enabled"]
+    _run(chain, 50)
+    assert np.max(np.abs(_run(chain, 20, level=0.0))) > 0.01
+
+
+def test_fx_panic_ignored_for_disabled_effects(store):
+    chain = _chain(store, {})
+    store.set("out.fx_panic", True)
+    store.set("out.fx_panic", False)
+    _run(chain, 10)
+    assert not chain.echo.switch.on and not chain.spring.switch.on

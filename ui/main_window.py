@@ -871,6 +871,7 @@ class MainWindow(QMainWindow):
                 self.session.set_meters(chain, chain.mic_level_db, chain.mic.gr_db)
             else:
                 self.session.set_meters(None)
+            self.session.set_fx_hot(chain is not None and chain.fx_hot())
             self.session.set_pickup(self.midi.pickup_pending() if self.midi.pickup else {})
             self._spectrum_tick = (self._spectrum_tick + 1) % 2
             if self.qplots.active and self._spectrum_tick == 0:

@@ -25,6 +25,8 @@ PARAMS = [
     ParamSpec("mic.eq_high", "High", 0.0, -12.0, 12.0, "dB", step=0.5),
     ParamSpec("mic.level", "Poziom", 0.0, -40.0, 12.0, "dB", step=0.5),
     ParamSpec("mic.echo_send", "Send echo", 0.3, 0.0, 1.0, "%"),
+    # gest dubowy: chwilowy send mikrofonu do echa na 100% (obsługa w SignalChain)
+    ParamSpec("mic.throw", "Throw mic", False, kind="bool", momentary=True, scene=False),
     ParamSpec("mic.talkover", "Talkover", False, kind="bool"),
     ParamSpec("mic.talkover_depth", "Głębokość talkover", -10.0, -30.0, 0.0, "dB", step=0.5),
 ]

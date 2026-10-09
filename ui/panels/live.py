@@ -73,7 +73,13 @@ class LivePanel(QFrame):
             kills.addWidget(btn)
         lay.addLayout(kills)
 
-        for key, text in (("echo.throw", "THROW"), ("siren.trigger", "SYRENA"), ("spring.crash", "CRASH")):
+        for key, text in (
+            ("echo.throw", "THROW"),
+            ("preamp.cut", "DRY CUT"),
+            ("siren.trigger", "SYRENA"),
+            ("spring.crash", "CRASH"),
+            ("out.fx_panic", "FX PANIC"),
+        ):
             btn = MomentaryButton(bridge, key, text)
             btn.setMinimumHeight(40)
             btn.setMinimumWidth(72)
