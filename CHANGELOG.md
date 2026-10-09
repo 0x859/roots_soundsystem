@@ -9,6 +9,8 @@ Etap 2 (w toku): nowy interfejs QML z konfigurowalnym układem.
 
 ### Dodane
 - Profil kontrolera Akai MIDImix (warstwa SHIFT, przejęcie wartości, akcje, diody) i gotowe układy wyjść dla Focusrite Scarlett 4i4.
+- Mapa kontrolera MIDI (karta „MIDI – KONTROLER”): rysunek MIDImix z przypisaniami, warstwy NORMAL/SHIFT, wartości i diody na żywo, edycja przypisań, eksport/import mapy; wskaźnik MIDI w nagłówku LIVE.
+- Automatyczne łączenie z MIDImix: wykrycie po podłączeniu, ponowne połączenie po odłączeniu (także pod innym numerem portu). Do kontrolera można przypisać DSP on/off i pamięci syreny M1–M4.
 - Interfejs QML: ekrany LIVE i KONFIGURACJA z kart opisanych profilem JSON, pasek padów, tryb „Edycja układu” (inspektor, przeciąganie, zmiana szerokości i wysokości kart, cofanie, profile, import/eksport).
 - Urządzenia i mapowanie kanałów bezpośrednio w QML, wczytywanie własnej IR, wykresy (odpowiedź toru, zwrotnica, analizator widma).
 - Start z czystym torem (moduły DSP wyłączone; przełącznik DSP n/8), przełącznik modeli kolumn `sim.enabled`.

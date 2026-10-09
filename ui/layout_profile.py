@@ -51,6 +51,7 @@ VIEWS = {
     "view:room_ir": "Własna IR miejsca (plik)",
     "view:eq_presets": "Presety EQ",
     "view:siren_presets": "Presety syreny (brzmienia)",
+    "view:midi_map": "MIDI – mapa kontrolera",
 }
 MAX_SPAN = 4
 MAX_ROWS = 3
@@ -224,6 +225,7 @@ def default_profile() -> dict[str, Any]:
             _c("sim.enabled", "button", "S", label="Modele"),
             _c("view:room_ir", "meter", "M"),
         ], visible="config", toggle="room.enabled"),
+        _card("midi", "MIDI – KONTROLER", [_c("view:midi_map", "meter", "M")], span=4, visible="config"),
         _card("iso_cfg", "IZOLATOR – PODZIAŁ", [
             _c("iso.slope", "value", "M"),
             _c("iso.f1", "knob", "S", label="Sub/bass"),

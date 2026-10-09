@@ -51,6 +51,7 @@ Item {
             case "view:room_ir": return irC
             case "view:eq_presets": return eqC
             case "view:siren_presets": return sirenPresetsC
+            case "view:midi_map": return midiMapC
             }
             switch (root.type) {
             case "fader": return faderC
@@ -147,6 +148,10 @@ Item {
     Component {
         id: sirenPresetsC
         PresetsView { kind: "siren"; interactive: !root.editing }
+    }
+    Component {
+        id: midiMapC
+        MidiMapView { interactive: !root.editing }
     }
 
     // --- tryb edycji ---

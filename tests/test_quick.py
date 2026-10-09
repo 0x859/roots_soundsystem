@@ -466,7 +466,7 @@ def _make_window(app, tmp_path, monkeypatch):
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.IniFormat)
     settings.setValue("audio/output", "Speakers")
     win = MainWindow(ParamStore(all_specs()), settings)
-    for t in (win.scaler._timer, win._midi_timer):
+    for t in (win.scaler._timer, win._midi_timer, win._midi_watch):
         t.stop()
     win.show()
     app.processEvents()

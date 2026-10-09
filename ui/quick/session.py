@@ -9,6 +9,7 @@ from typing import Any
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from dsp.crossover import ALL_WAYS
+from engine.midi import element_name
 
 FLOOR_DB = -60.0
 CLIP_DB = -0.3
@@ -25,23 +26,10 @@ def lin_db(x: float) -> float:
     return 20.0 * math.log10(x) if x > 1e-6 else -120.0
 
 
-def _mid_text(mid: str) -> str:
-    kind, _, rest = mid.partition(":")
-    chan, _, num = rest.partition(":")
-    ch = f" · kan. {int(chan) + 1}" if chan.isdigit() and chan != "0" else ""
-    if kind == "cc":
-        return f"CC {num}{ch}"
-    if kind == "note":
-        return f"Nuta {num}{ch}"
-    if kind == "pw":
-        return "Pitch bend"
-    return mid
-
-
 def midi_label(mapping: dict[str, str], shift_mapping: dict[str, str], target: str) -> str:
     """Opis elementu kontrolera przypisanego do celu, np. „CC 19” albo „SHIFT + CC 16”."""
-    found = [_mid_text(m) for m, t in mapping.items() if t == target]
-    found += ["SHIFT + " + _mid_text(m) for m, t in shift_mapping.items() if t == target]
+    found = [element_name(m) for m, t in mapping.items() if t == target]
+    found += ["SHIFT + " + element_name(m) for m, t in shift_mapping.items() if t == target]
     return ", ".join(found)
 
 
@@ -64,6 +52,7 @@ class QmlSession(QObject):
     sirenPresetsChanged = Signal()
     dspChanged = Signal()
     toast = Signal(str)
+    revealCard = Signal(str)  # przewiń do karty zawierającej kontrolkę o tym celu (np. "view:midi_map")
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)

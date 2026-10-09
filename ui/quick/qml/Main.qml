@@ -34,6 +34,18 @@ Rectangle {
     }
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
     function cardItem(ci) { return cardRep.itemAt(ci) }
+    // przewija ekran do pierwszej karty z kontrolką o danym celu (np. mapa MIDI z menu okna)
+    function revealTarget(target) {
+        const cards = Profile.cards
+        for (let ci = 0; ci < cards.length; ci++) {
+            if (!cards[ci].controls.some(c => c.param === target)) continue
+            const item = cardItem(ci)
+            if (!item || !item.visible) continue
+            const y = item.mapToItem(flick.contentItem, 0, 0).y
+            flick.contentY = Math.max(0, Math.min(y - 8 * root.s, flick.contentHeight - flick.height))
+            return
+        }
+    }
 
     // --- interfejs dla kart, kontrolek i inspektora (host) ---
     function selectCard(ci) {
@@ -226,9 +238,17 @@ Rectangle {
         }
         function onMessage(text) { toast.show(text) }
     }
+    // przewinięcie po ułożeniu siatki (zmiana ekranu przebudowuje widoczność kart)
+    Timer {
+        id: revealTimer
+        property string target: ""
+        interval: 80
+        onTriggered: root.revealTarget(target)
+    }
     Connections {
         target: Session
         function onToast(text) { toast.show(text) }
+        function onRevealCard(target) { revealTimer.target = target; revealTimer.restart() }
         function onEditingChanged() {
             root.cancelDrag()
             root.rs = null

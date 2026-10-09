@@ -52,7 +52,7 @@ from .panels import (
 )
 from .panels.dub import N_MEMORIES
 from .plots import PlotTabs
-from .quick import LayoutModel, QmlAudio, QmlParams, QmlPlots, QmlSession
+from .quick import LayoutModel, QmlAudio, QmlMidi, QmlParams, QmlPlots, QmlSession
 from .quick.session import midi_label
 from .scaling import DeskScaler
 from .theme import app_icon
@@ -150,6 +150,9 @@ class MainWindow(QMainWindow):
         self.qplots = QmlPlots(self)
         self.qaudio = QmlAudio(store, list_devices, self)
         self.qaudio.applyRequested.connect(self._apply_audio_draft)
+        self.qmidi = QmlMidi(self.midi, self)
+        self.qmidi.portRequested.connect(lambda name: self._open_midi(name or None))
+        self.qmidi.fileRequested.connect(self._midi_file)
         self._dsp_memory = self._saved_switches()
         self._spectrum_tick = 0
         self.session.requested.connect(self._on_qml_request)
@@ -168,6 +171,7 @@ class MainWindow(QMainWindow):
 
         self.midi.on_learned = lambda mid, key: self.statusBar().showMessage(f"MIDI: {mid} → {store.specs[key].label}", 4000)
         self.midi.on_action = self._on_midi_action
+        self.midi.on_status = self._on_midi_status
         self._siren_mem = -1
         self.midi.load_json(settings.value("midi/mapping"))
         self.bridge.touched.connect(self._on_touched)
@@ -181,6 +185,10 @@ class MainWindow(QMainWindow):
         self._status_timer.start()
         self._midi_timer = QTimer(self, interval=5, timeout=self.midi.poll)
         self._midi_timer.start()
+        # podłączenie / odłączenie kontrolera (także pierwsze wykrycie MIDImix bez zapisanego portu)
+        self._midi_watch = QTimer(self, interval=2000, timeout=self._watch_midi)
+        if startup_checks:
+            self._midi_watch.start()
 
         self.refresh_devices()
         self.output_panel.set_mode(self.mode)
@@ -197,11 +205,8 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(300, self._startup_checks)
 
         midi_port = settings.value("midi/port")
-        if midi_port and midi_port in self.midi.inputs():
-            try:
-                self.midi.open(midi_port)
-            except Exception:
-                pass
+        if midi_port:
+            self.midi.ensure_connected(midi_port)
 
     # --- budowa UI ---
     def _build_central(self) -> None:
@@ -271,7 +276,7 @@ class MainWindow(QMainWindow):
         try:
             from .quick.view import QuickDesk
 
-            desk = QuickDesk(self.qparams, self.layout_model, self.session, self.qplots, self.qaudio)
+            desk = QuickDesk(self.qparams, self.layout_model, self.session, self.qplots, self.qaudio, self.qmidi)
         except Exception as exc:  # brak modułów QtQuick w paczce itp.
             print(f"Interfejs QML niedostępny: {exc}")
             return
@@ -348,6 +353,8 @@ class MainWindow(QMainWindow):
     def _populate_midi_menu(self) -> None:
         m = self.m_midi
         m.clear()
+        m.addAction("Podgląd mapy kontrolera…", self._show_midi_map)
+        m.addSeparator()
         if not self.midi.available:
             act = m.addAction("MIDI niedostępne (zainstaluj mido + python-rtmidi lub pygame-ce)")
             act.setEnabled(False)
@@ -378,6 +385,9 @@ class MainWindow(QMainWindow):
         pickup.toggled.connect(lambda on: setattr(self.midi, "pickup", on))
         leds = m.addAction("Diody kontrolera: " + ("aktywne" if self.midi.out_port is not None else "brak portu wyjściowego"))
         leds.setEnabled(False)
+        m.addSeparator()
+        m.addAction("Eksport mapy…", lambda: self._midi_file("export"))
+        m.addAction("Import mapy…", lambda: self._midi_file("import"))
         m.addAction(f"Wyczyść mapowanie ({len(self.midi.mapping)})", self.midi.clear)
 
     def _build_statusbar(self) -> None:
@@ -644,6 +654,56 @@ class MainWindow(QMainWindow):
             self.settings.setValue("midi/port", name or "")
         except Exception as exc:
             QMessageBox.critical(self, "MIDI", f"Nie udało się otworzyć portu:\n{exc}")
+        self.qmidi.refreshPorts()
+
+    def _watch_midi(self) -> None:
+        self.midi.ensure_connected(self.settings.value("midi/port"))
+
+    def _on_midi_status(self, status: str) -> None:
+        if status == "connected":
+            self.settings.setValue("midi/port", self.midi.port_name or "")
+            text = f"MIDI: podłączono {self.midi.port_name}" + (f" ({self.midi.profile_name})" if self.midi.profile_name else "")
+        else:
+            text = "MIDI: kontroler odłączony – połączy się sam po ponownym podłączeniu"
+        self.statusBar().showMessage(text, 5000)
+        self.session.toast.emit(text)
+        self.qmidi.refreshPorts()
+
+    def _show_midi_map(self) -> None:
+        """Mapa kontrolera jest kartą interfejsu QML (KONFIGURACJA → MIDI – KONTROLER)."""
+        if self.quick is None:
+            QMessageBox.information(self, "MIDI", "Podgląd mapy jest dostępny w nowym interfejsie (QML).")
+            return
+        self.set_view("qml")
+        self.session.editing = False
+        cards = [c for c in self.layout_model.profile["cards"] if any(x["param"] == "view:midi_map" for x in c["controls"])]
+        if not cards:
+            self.session.setProperty("screen", "config")
+            self.session.toast.emit("Profil układu nie ma karty MIDI – RESET profilu albo dodaj widok "
+                                    "„MIDI – mapa kontrolera” w trybie ✎ UKŁAD")
+            return
+        self.session.setProperty("screen", "live" if cards[0].get("visible") == "live" else "config")
+        self.session.revealCard.emit("view:midi_map")
+
+    def _midi_file(self, what: str) -> None:
+        if what == "export":
+            path, _ = QFileDialog.getSaveFileName(self, "Eksport mapy MIDI", "mapa_midi.json", "Mapa MIDI (*.json)")
+            if path:
+                data = json.dumps(json.loads(self.midi.to_json()), indent=2, ensure_ascii=False)
+                Path(path).write_text(data, encoding="utf-8")
+                self.session.toast.emit(f"Zapisano mapę MIDI: {Path(path).name}")
+        elif what == "import":
+            path, _ = QFileDialog.getOpenFileName(self, "Import mapy MIDI", "", "Mapa MIDI (*.json)")
+            if not path:
+                return
+            try:
+                text = Path(path).read_text(encoding="utf-8")
+                json.loads(text)
+            except (OSError, ValueError) as exc:
+                self.session.toast.emit(f"Nie udało się wczytać mapy: {exc}")
+                return
+            self.midi.load_json(text)
+            self.session.toast.emit(f"Wczytano mapę MIDI ({len(self.midi.mapping)} przypisań)")
 
     def _apply_midi_profile(self, name: str) -> None:
         self.midi.apply_profile(name)
@@ -710,6 +770,8 @@ class MainWindow(QMainWindow):
             self.session.toast.emit(f"Zapisano pamięć syreny M{int(arg) + 1}")
         elif action == "midi_learn":
             self._learn_param(str(arg))
+        elif action == "midi_map":
+            self._show_midi_map()
         elif action == "layout_export":
             path, _ = QFileDialog.getSaveFileName(self, "Eksport układu", f"{self.layout_model.profile['name']}.json", "Układ (*.json)")
             if path:
@@ -802,6 +864,7 @@ class MainWindow(QMainWindow):
 
     # --- timery ---
     def _update_meters(self) -> None:
+        self.qmidi.tick()
         chain = self.engine.chain if self.engine.running else None
         if self.view == "qml":
             if chain is not None:

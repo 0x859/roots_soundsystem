@@ -19,7 +19,7 @@ Pełny plan, decyzje i stan prac: `Plan.md` (sekcja „Etap 2: rozwój”). READ
 - `dsp/` – moduły DSP; `dsp/graph.py` (`SignalChain`) składa tor. Każdy moduł ma listę `PARAMS` (`ParamSpec`).
 - `engine/params.py` – `ParamStore`: jedno źródło prawdy dla GUI, presetów, MIDI i DSP (słuchacze z `source`).
 - `engine/audio_engine.py` – strumienie WASAPI, bufory kołowe, callback wyjściowy. Kod w callbackach nie może rzucać wyjątków ani alokować dużo pamięci.
-- `engine/midi.py` + `engine/midi_profiles.py` – mapowanie MIDI: learn, profile (Akai MIDImix), warstwa SHIFT, przejęcie wartości (pickup), akcje `action:*`, diody przez port wyjściowy. Format zapisu JSON v2 (zgodny ze starym płaskim).
+- `engine/midi.py` + `engine/midi_profiles.py` – mapowanie MIDI: learn, profile (Akai MIDImix), warstwa SHIFT, przejęcie wartości (pickup), akcje `action:*` (nadzbiór akcji interfejsu – test pilnuje), diody przez port wyjściowy, `assign/unassign`, `ensure_connected` (watchdog okna co 2 s), `revision` (zmiana mapy/połączenia). Układ fizyczny do podglądu: `MidiProfile.layout` (`Strip`/`Element`). Format zapisu JSON v2 (zgodny ze starym płaskim).
 - `engine/devices.py` – gotowe układy wyjść dla kart 4-kanałowych (Focusrite Scarlett 4i4 3rd gen: słuchawki = wyjścia 3–4, Loopback = wejścia 5–6).
 - `presets/` – sceny, presety EQ i syreny (JSON w `%APPDATA%\RootsSoundsystem\`); `store.PRESET_KINDS` opisuje rodzaje presetów wspólnie dla okna, QML (`PresetsView`, żądania `<kind>_apply/_save/_delete/_reset`) i Widgets (`PresetBar`).
 - `version.py` – jedyne źródło wersji (SemVer; MINOR = etap planu). Przy zmianie wersji zaktualizuj też `pyproject.toml` (test pilnuje) i `CHANGELOG.md`.
@@ -27,7 +27,7 @@ Pełny plan, decyzje i stan prac: `Plan.md` (sekcja „Etap 2: rozwój”). READ
 - Czysty tor: `dsp.graph.DSP_SWITCHES` (wszystkie `*.enabled`, w tym `sim.enabled` = modele kolumn) i `bypass_values()`; `presets.store.restore_state` przy starcie wyłącza moduły (ustawienie `startup/dsp` = `clean` domyślnie | `last`).
 - `ui/audio_config.py` – wybór urządzeń i zapis ustawień audio bez widżetów (wspólne dla okna Audio i `ui/quick/audio.py`).
 - `ui/layout_profile.py` – profil układu (JSON, bez Qt): karty, kontrolki, pady, skróty, motyw; walidacja i pliki w `%APPDATA%\RootsSoundsystem\layouts\`.
-- `ui/quick/` – nowy interfejs QML osadzony w `MainWindow` przez `QQuickWidget`: `QmlParams` (parametry), `LayoutModel` + `QmlTheme`, `QmlSession` (stan i polecenia do okna, sygnał `requested`), `QmlPlots` (krzywe wykresów), pliki `qml/`. Kontekst QML: `Params`, `Profile`, `Theme`, `Session`, `Plots`.
+- `ui/quick/` – nowy interfejs QML osadzony w `MainWindow` przez `QQuickWidget`: `QmlParams` (parametry), `LayoutModel` + `QmlTheme`, `QmlSession` (stan i polecenia do okna, sygnał `requested`), `QmlPlots` (krzywe wykresów), pliki `qml/`. Kontekst QML: `Params`, `Profile`, `Theme`, `Session`, `Plots`, `Audio`, `Midi` (`QmlMidi` – mapa kontrolera, `tick()` z timera okna).
 - Każda zmiana profilu przebudowuje wszystkie karty (Repeater po `Profile.cards`) – stan, który ma przetrwać (zaznaczenie, menu karty, rozwinięcia), trzymaj w `Main.qml`, nie w `Card.qml`.
 - `ui/main_window.py`, `ui/panels/`, `ui/widgets/` – stół klasyczny (Qt Widgets), dostępny w menu Widok do końca migracji.
 

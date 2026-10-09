@@ -155,3 +155,118 @@ def test_leds_off_on_close(mix):
     port = mix.out_port
     mix.close()
     assert len(port.sent) == 16 and all(v == 0 for _, v in port.sent)
+
+
+def test_actions_cover_interface_actions():
+    from ui.layout_profile import ACTIONS as UI_ACTIONS
+
+    assert set(UI_ACTIONS) <= set(ACTIONS)  # każdą akcję z interfejsu można przypisać do kontrolera
+
+
+def test_midimix_layout_covers_mapping():
+    p = PROFILES["Akai MIDImix"]
+    strips = p.layout
+    assert len(strips) == 9 and strips[-1].name == "MASTER"
+    ids = {e.id for s in strips for e in s.elements} | {e.shift_id for s in strips for e in s.elements if e.shift_id}
+    assert set(p.mapping) <= ids and set(p.shift_mapping) <= ids
+    assert p.shift in ids
+    kinds = [e.kind for e in strips[0].elements]
+    assert kinds == ["knob", "knob", "knob", "button", "button", "fader"]
+    mute = strips[0].elements[3]
+    assert (mute.id, mute.shift_id, mute.led) == ("note:0:1", "note:0:2", True)
+
+
+def test_assign_and_unassign(mix, store):
+    mix.assign("cc:0:16", "echo.feedback")
+    assert mix.mapping["cc:0:16"] == "echo.feedback"
+    mix.pickup = False
+    mix.handle(cc(16, 127))
+    assert store["echo.feedback"] == pytest.approx(store.specs["echo.feedback"].max)
+    mix.assign("cc:0:16", "room.mix", shift=True)
+    assert mix.shift_mapping["cc:0:16"] == "room.mix"
+    mix.assign("note:0:3", "action:dsp_toggle")
+    assert mix.mapping["note:0:3"] == "action:dsp_toggle"
+    with pytest.raises(KeyError):
+        mix.assign("cc:0:16", "nie.istnieje")
+    mix.unassign("cc:0:16")
+    assert "cc:0:16" not in mix.mapping and mix.shift_mapping["cc:0:16"] == "room.mix"
+    mix.unassign("cc:0:16", shift=True)
+    assert "cc:0:16" not in mix.shift_mapping
+
+
+def test_assign_bool_to_led_button_updates_led(mix, store):
+    store.set("preamp.mono", True, source="gui")
+    mix.assign("note:0:1", "preamp.mono")  # Mute 1 (z diodą)
+    mix.flush_leds()
+    assert (1, 127) in mix.out_port.sent
+
+
+def test_activity_and_hw_position(mix):
+    before = mix.activity.get("cc:0:19", 0)
+    mix.handle(cc(19, 64))
+    assert mix.activity["cc:0:19"] == before + 1
+    assert mix.hw_position("cc:0:19") == pytest.approx(64 / 127)
+    assert mix.last_event == ("cc:0:19", pytest.approx(64 / 127))
+    mix.handle(note(27, True))  # SOLO (SHIFT) też jest aktywnością
+    assert mix.activity["note:0:27"] == 1
+
+
+def test_element_names():
+    from engine.midi import element_name
+
+    assert element_name("cc:0:19") == "CC 19"
+    assert element_name("note:0:27") == "Nuta 27"
+    assert element_name("cc:3:7") == "CC 7 · kan. 4"
+    assert element_name("pw:0") == "Pitch bend"
+
+
+class FakeMido:
+    """Podmiana mido: lista portów zmienia się jak przy podłączaniu/odłączaniu kontrolera."""
+
+    def __init__(self, names):
+        self.names = list(names)
+        self.opened = []
+
+    def get_input_names(self):
+        return list(self.names)
+
+    def get_output_names(self):
+        return list(self.names)
+
+    def open_input(self, name):
+        self.opened.append(name)
+        return SimpleNamespace(iter_pending=lambda: [], close=lambda: None)
+
+    def open_output(self, name):
+        return FakeOut()
+
+
+def test_ensure_connected_follows_plugging(store, monkeypatch):
+    import engine.midi as em
+
+    fake = FakeMido([])
+    monkeypatch.setattr(em, "mido", fake)
+    m = MidiController(store)
+    m.backend = "fake"
+    events = []
+    m.on_status = events.append
+    assert m.ensure_connected("MIDI Mix 0") is False and m.port is None
+    fake.names = ["Microsoft GS", "MIDI Mix 1"]  # Windows nadał inny numer
+    assert m.ensure_connected("MIDI Mix 0") is True
+    assert m.port_name == "MIDI Mix 1" and m.profile_name == "Akai MIDImix"
+    fake.names = ["Microsoft GS"]  # odłączony
+    assert m.ensure_connected("MIDI Mix 0") is False and m.port is None
+    assert events == ["connected", "disconnected"]
+
+
+def test_ensure_connected_auto_detects_known_controller(store, monkeypatch):
+    import engine.midi as em
+
+    fake = FakeMido(["Launchpad", "MIDI Mix"])
+    monkeypatch.setattr(em, "mido", fake)
+    m = MidiController(store)
+    m.backend = "fake"
+    assert m.ensure_connected(None) is True and m.port_name == "MIDI Mix"
+    m2 = MidiController(store)
+    m2.backend = "fake"
+    assert m2.ensure_connected("") is False  # pusty = świadomie „bez kontrolera”

@@ -11,6 +11,7 @@ from PySide6.QtQuickWidgets import QQuickWidget
 
 from .audio import QmlAudio
 from .layout_model import LayoutModel, load_bundled_fonts
+from .midi import QmlMidi
 from .params import QmlParams
 from .plots import QmlPlots
 from .session import QmlSession
@@ -21,10 +22,10 @@ def qml_dir() -> Path:
 
 
 class QuickDesk(QQuickWidget):
-    """Ekran LIVE / KONFIGURACJA w QML; kontekst: `Params`, `Profile`, `Theme`, `Session`, `Plots`, `Audio`."""
+    """Ekran LIVE / KONFIGURACJA w QML; kontekst: `Params`, `Profile`, `Theme`, `Session`, `Plots`, `Audio`, `Midi`."""
 
     def __init__(self, params: QmlParams, layout: LayoutModel, session: QmlSession, plots: QmlPlots | None = None,
-                 audio: QmlAudio | None = None, parent=None):
+                 audio: QmlAudio | None = None, midi: QmlMidi | None = None, parent=None):
         QQuickStyle.setStyle("Basic")
         load_bundled_fonts()
         super().__init__(parent)
@@ -33,6 +34,11 @@ class QuickDesk(QQuickWidget):
         self.session = session
         self.plots = plots if plots is not None else QmlPlots(self)
         self.audio = audio if audio is not None else QmlAudio(params.bridge.store, list, self)
+        if midi is None:
+            from engine.midi import MidiController
+
+            midi = QmlMidi(MidiController(params.bridge.store), self)
+        self.midi = midi
         ctx = self.rootContext()
         ctx.setContextProperty("Params", params)
         ctx.setContextProperty("Profile", layout)
@@ -40,13 +46,14 @@ class QuickDesk(QQuickWidget):
         ctx.setContextProperty("Session", session)
         ctx.setContextProperty("Plots", self.plots)
         ctx.setContextProperty("Audio", self.audio)
+        ctx.setContextProperty("Midi", self.midi)
         self.setResizeMode(QQuickWidget.SizeRootObjectToView)
         self.setClearColor(layout.theme.bg)
         layout.theme.changed.connect(lambda: self.setClearColor(layout.theme.bg))
         self.setSource(QUrl.fromLocalFile(str(qml_dir() / "Main.qml")))
         # obiekty kontekstu muszą żyć dłużej niż scena, inaczej przy niszczeniu okna wiązania QML
         # trafią na null; dzieci widżetu są usuwane dopiero po scenie
-        for obj in (params, layout, session, self.plots, self.audio):
+        for obj in (params, layout, session, self.plots, self.audio, self.midi):
             obj.setParent(self)
 
     def shutdown(self, *_args) -> None:

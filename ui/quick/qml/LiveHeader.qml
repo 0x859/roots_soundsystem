@@ -142,7 +142,7 @@ Rectangle {
         y: root.fits ? root.pad + (left.height - height) / 2 : left.y + left.height + root.gap
         width: root.fits ? implicitW : root.width - 2 * root.pad
         spacing: 8 * root.s
-        readonly property real implicitW: chips.implicitWidth + dsp.width + nav.implicitWidth + tools.implicitWidth + 3 * spacing
+        readonly property real implicitW: chips.implicitWidth + midi.width + dsp.width + nav.implicitWidth + tools.implicitWidth + 4 * spacing
 
         Row {
             id: chips
@@ -182,6 +182,46 @@ Rectangle {
                     color: Qt.darker(Theme.text, 1.12)
                     font.family: Theme.valueFont
                     font.pixelSize: Math.round(13 * root.s)
+                }
+            }
+        }
+
+        // stan kontrolera MIDI (kropka = połączony, SHIFT = trzymane SOLO); klik otwiera mapę
+        Item {
+            id: midi
+            width: midiBox.width
+            height: 48 * root.s
+            Rectangle {
+                id: midiBox
+                anchors.verticalCenter: parent.verticalCenter
+                width: midiRow.implicitWidth + 24 * root.s
+                height: 40 * root.s
+                radius: 8 * root.s
+                color: Midi.hwShift ? Qt.rgba(0.89, 0.65, 0.17, 0.16) : Theme.raised
+                border.color: Midi.hwShift ? Theme.accent : Qt.lighter(Theme.line, 1.3)
+                Row {
+                    id: midiRow
+                    anchors.centerIn: parent
+                    spacing: 7 * root.s
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 9 * root.s
+                        height: width
+                        radius: width / 2
+                        color: Midi.connected ? Theme.fx : Qt.darker(Theme.muted, 1.3)
+                    }
+                    Text {
+                        text: Midi.hwShift ? "MIDI · SHIFT" : "MIDI"
+                        color: Midi.connected ? Theme.text : Theme.muted
+                        font.family: Theme.labelFont
+                        font.weight: Font.Bold
+                        font.pixelSize: Math.round(15 * root.s)
+                        font.letterSpacing: 1.2
+                    }
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: Session.request("midi_map")
                 }
             }
         }

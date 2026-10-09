@@ -14,8 +14,32 @@ ACTIONS = {
     "action:scene_next": "Następna scena",
     "action:tap": "Tap tempo",
     "action:siren_mem_next": "Następna pamięć syreny",
+    "action:siren_mem:0": "Pamięć syreny M1",
+    "action:siren_mem:1": "Pamięć syreny M2",
+    "action:siren_mem:2": "Pamięć syreny M3",
+    "action:siren_mem:3": "Pamięć syreny M4",
     "action:start_stop": "Start / stop",
+    "action:dsp_toggle": "DSP: wszystko wył. / przywróć",
 }
+
+
+@dataclass(frozen=True)
+class Element:
+    """Fizyczny element kontrolera na mapie (gałka, przycisk, suwak)."""
+
+    id: str  # identyfikator komunikatu, np. "cc:0:16"
+    kind: str  # "knob" | "button" | "fader"
+    name: str = ""  # napis na sprzęcie, np. "MUTE"
+    shift_id: str | None = None  # inny komunikat wysyłany przy trzymanym SHIFT (MIDImix: rząd Mute/Solo)
+    led: bool = False
+
+
+@dataclass(frozen=True)
+class Strip:
+    """Kolumna elementów kontrolera (kanał lub sekcja master), od góry do dołu."""
+
+    name: str
+    elements: tuple[Element, ...]
 
 
 @dataclass
@@ -27,6 +51,7 @@ class MidiProfile:
     shift: str | None = None  # element trzymany jako SHIFT
     feedback: tuple[str, ...] = ()  # elementy z diodą (note-on 127/0)
     pickup: bool = True
+    layout: tuple[Strip, ...] = ()  # układ fizyczny do podglądu mapy (pusty = tylko lista)
 
     def matches(self, port_name: str) -> bool:
         low = port_name.lower()
@@ -109,7 +134,26 @@ def _midimix() -> MidiProfile:
         shift_mapping=shift_mapping,
         shift=_note(_MIX_SOLO_BTN),
         feedback=tuple(_note(n) for n in _MIX_MUTE + _MIX_REC),
+        layout=_midimix_layout(),
     )
+
+
+def _midimix_layout() -> tuple[Strip, ...]:
+    strips = []
+    for i in range(8):
+        strips.append(Strip(str(i + 1), (
+            *(Element(_cc(c), "knob") for c in _MIX_KNOBS[i]),
+            Element(_note(_MIX_MUTE[i]), "button", "MUTE", shift_id=_note(_MIX_SOLO[i]), led=True),
+            Element(_note(_MIX_REC[i]), "button", "REC ARM", led=True),
+            Element(_cc(_MIX_FADERS[i]), "fader"),
+        )))
+    strips.append(Strip("MASTER", (
+        Element(_note(_MIX_BANK_LEFT), "button", "BANK ◀"),
+        Element(_note(_MIX_BANK_RIGHT), "button", "BANK ▶"),
+        Element(_note(_MIX_SOLO_BTN), "button", "SOLO"),
+        Element(_cc(_MIX_MASTER), "fader"),
+    )))
+    return tuple(strips)
 
 
 PROFILES: dict[str, MidiProfile] = {p.name: p for p in (_midimix(),)}

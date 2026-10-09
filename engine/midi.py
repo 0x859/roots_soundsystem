@@ -13,7 +13,7 @@ from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
-from .midi_profiles import ACTIONS, PROFILES, MidiProfile, profile_for_port
+from .midi_profiles import ACTIONS, PROFILES, MidiProfile, Strip, profile_for_port
 from .params import ParamStore
 
 try:
@@ -54,6 +54,20 @@ def match_output(input_name: str, outputs: list[str]) -> str | None:
     return None
 
 
+def element_name(mid: str) -> str:
+    """Czytelna nazwa elementu kontrolera: „CC 19”, „Nuta 1 · kan. 2”, „Pitch bend”."""
+    kind, _, rest = mid.partition(":")
+    chan, _, num = rest.partition(":")
+    ch = f" · kan. {int(chan) + 1}" if chan.isdigit() and chan != "0" else ""
+    if kind == "cc":
+        return f"CC {num}{ch}"
+    if kind == "note":
+        return f"Nuta {num}{ch}"
+    if kind == "pw":
+        return "Pitch bend"
+    return mid
+
+
 def _note_message(channel: int, note: int, velocity: int) -> Any:
     if mido is not None:
         return mido.Message("note_on", channel=channel, note=note, velocity=velocity)
@@ -77,6 +91,10 @@ class MidiController:
         self.armed_key: str | None = None
         self.on_learned: Callable[[str, str], None] | None = None
         self.on_action: Callable[[str], None] | None = None
+        self.on_status: Callable[[str], None] | None = None  # "connected" / "disconnected"
+        self.activity: dict[str, int] = {}  # licznik komunikatów na element (podświetlenie na mapie)
+        self.last_event: tuple[str, float] | None = None
+        self.revision = 0  # rośnie przy każdej zmianie mapy, profilu lub połączenia (odświeżanie podglądu)
         self._toggle_state: dict[str, bool] = {}
         self._shift_held = False
         self._hw: dict[str, float] = {}  # ostatnia pozycja elementu kontrolera (0..1)
@@ -125,6 +143,40 @@ class MidiController:
             if profile is not None:
                 self.apply_profile(profile)
         self._mark_all_leds()
+        self.revision += 1
+
+    def ensure_connected(self, saved: str | None) -> bool:
+        """Pilnuje połączenia (wołane co kilka sekund): wykrywa odłączenie, ponownie łączy z zapisanym
+        portem – także pod innym numerem nadanym przez Windows – a gdy nic nie zapisano (None), łączy
+        ze znanym kontrolerem (np. MIDImix). Pusty napis = świadomie bez kontrolera."""
+        if not self.available:
+            return False
+        names = self.inputs()
+        if self.port is not None:
+            if any(_port_base(n) == _port_base(self.port_name or "") for n in names):
+                return True
+            self.close()
+            self._notify("disconnected")
+            return False
+        if saved == "":
+            return False
+        if saved:
+            candidates = [n for n in names if n == saved] + [n for n in names if n != saved and _port_base(n) == _port_base(saved)]
+        else:
+            candidates = [n for n in names if profile_for_port(n) is not None]
+        for name in candidates:
+            try:
+                self.open(name)
+            except Exception:
+                self.close()
+                continue
+            self._notify("connected")
+            return True
+        return False
+
+    def _notify(self, status: str) -> None:
+        if self.on_status:
+            self.on_status(status)
 
     def close(self) -> None:
         if self.out_port is not None:
@@ -142,6 +194,7 @@ class MidiController:
         self.out_port = None
         self.port_name = None
         self._shift_held = False
+        self.revision += 1
 
     # --- mapowanie i profile ---
     def apply_profile(self, profile: MidiProfile | str) -> None:
@@ -156,6 +209,35 @@ class MidiController:
         self._latched.clear()
         self._toggle_state.clear()
         self._mark_all_leds()
+        self.revision += 1
+
+    @property
+    def layout(self) -> tuple[Strip, ...]:
+        """Układ fizyczny bieżącego profilu (do podglądu mapy); pusty dla mapowania z samego learn."""
+        profile = PROFILES.get(self.profile_name or "")
+        return profile.layout if profile else ()
+
+    def assign(self, mid: str, target: str, shift: bool = False) -> None:
+        """Przypisuje element kontrolera do parametru lub akcji (bez trybu learn)."""
+        if not self._valid_target(target):
+            raise KeyError(target)
+        (self.shift_mapping if shift else self.mapping)[mid] = target
+        self._latched = {lk for lk in self._latched if lk[0] != mid}
+        self._mark_led(mid)
+        self.revision += 1
+
+    def unassign(self, mid: str, shift: bool = False) -> None:
+        (self.shift_mapping if shift else self.mapping).pop(mid, None)
+        self._latched = {lk for lk in self._latched if lk[0] != mid}
+        self._mark_led(mid)
+        self.revision += 1
+
+    def hw_position(self, mid: str) -> float | None:
+        """Ostatnia pozycja elementu (0..1) albo None, gdy jeszcze nic nie wysłał."""
+        return self._hw.get(mid)
+
+    def hw_positions(self) -> dict[str, float]:
+        return dict(self._hw)
 
     def arm(self, key: str) -> None:
         if self.learning:
@@ -169,6 +251,7 @@ class MidiController:
         self.feedback.clear()
         self.profile_name = None
         self._latched.clear()
+        self.revision += 1
 
     def _valid_target(self, target: Any) -> bool:
         return isinstance(target, str) and (target in self.store.specs or target in ACTIONS)
@@ -205,6 +288,9 @@ class MidiController:
         self.feedback = set(data.get("feedback") or ())
         self.pickup = bool(data.get("pickup", True))
         self.profile_name = data.get("profile") or None
+        self._latched.clear()
+        self._mark_all_leds()
+        self.revision += 1
 
     def target_for(self, mid: str) -> str | None:
         if self._shift_held and mid in self.shift_mapping:
@@ -237,6 +323,8 @@ class MidiController:
         mid, value = self.message_id(msg)
         if mid is None:
             return
+        self.activity[mid] = self.activity.get(mid, 0) + 1
+        self.last_event = (mid, value)
         if mid == self.shift_id:
             self._shift_held = value >= 0.5
             return
@@ -247,6 +335,7 @@ class MidiController:
             self._latched.add((mid, self.armed_key))  # świadome przypisanie: steruje od razu
             self._mark_led(mid)
             key, self.armed_key = self.armed_key, None
+            self.revision += 1
             if self.on_learned:
                 self.on_learned(mid, key)
             return

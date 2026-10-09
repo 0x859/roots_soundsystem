@@ -42,6 +42,7 @@ def window(app, tmp_path_factory):
     win = MainWindow(ParamStore(all_specs()), settings)
     win.scaler._timer.stop()
     win._midi_timer.stop()
+    win._midi_watch.stop()
     win.show()
     app.processEvents()
     win.scaler._timer.stop()
