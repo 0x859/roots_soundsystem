@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-
 from conftest import FS
+
 from dsp.crossover import Crossover
 from dsp.isolator import BANDS, Isolator
 

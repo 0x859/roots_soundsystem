@@ -8,6 +8,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtWidgets import QSizePolicy, QTabWidget
 
 from dsp.crossover import ALL_WAYS, WAY_LABELS
+
 from .theme import WAY_COLORS
 
 pg.setConfigOptions(antialias=True, background="#121418", foreground="#b8bcc4")

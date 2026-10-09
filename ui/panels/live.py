@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from dsp.crossover import ALL_WAYS, WAY_LABELS
 from dsp.isolator import BANDS
 from presets import store as preset_store
+
 from ..theme import GOLD, RED
 from ..widgets import Knob, LevelMeter, MomentaryButton, ToggleButton
 

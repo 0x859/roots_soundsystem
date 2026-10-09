@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QComboBox, QInputDialog, QMessageBox, QPushButton,
 
 from dsp.eq12 import BANDS, band_label
 from presets import store as preset_store
+
 from ..widgets import ParamSlider
 from .base import Panel, hbox
 

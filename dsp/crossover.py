@@ -88,7 +88,7 @@ class Crossover:
         if self.subsonic_on:
             x = self.subsonic.process(x)
         out = {}
-        for way, band in zip(lay.ways, lay.splitter.process(x)):
+        for way, band in zip(lay.ways, lay.splitter.process(x), strict=False):  # wątek audio
             y = self.delays[way].process(band)
             out[way] = y * (self.gains[way].block(n) * self.polarity[way])
         return out
@@ -98,7 +98,7 @@ class Crossover:
         pre = response(self._subsonic_sos, freqs, self.fs) if self.subsonic_on else response(identity(), freqs, self.fs)
         out = {}
         w = 2 * np.pi * np.asarray(freqs) / self.fs
-        for way, h in zip(lay.ways, lay.splitter.responses(freqs)):
+        for way, h in zip(lay.ways, lay.splitter.responses(freqs), strict=True):
             d = self.delays[way].delay
             out[way] = pre * h * self.gains[way].target * self.polarity[way] * np.exp(-1j * w * d)
         return out

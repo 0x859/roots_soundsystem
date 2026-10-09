@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from dsp.crossover import ALL_WAYS, SPLITS_BY_COUNT, WAY_LABELS, WAYS_BY_COUNT
+
 from ..theme import WAY_COLORS
 from .base import Panel, hbox
 

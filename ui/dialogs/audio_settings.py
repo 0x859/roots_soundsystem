@@ -11,59 +11,35 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QVBoxLayout,
 )
 
-from engine.audio_engine import EngineConfig, find_cable_output, list_devices, wasapi_default_output
+from engine.audio_engine import EngineConfig, list_devices
+from engine.devices import input_pairs, preset, presets_for
+
+from ..audio_config import BLOCKS, MODES, hints, mic_items, music_items, output_items, resolve_devices
 from ..widgets.channel_map import ChannelMapEditor
 
-MODES = (("sim", "Symulacja (stereo)"), ("multi", "Multi (wielokanałowe)"))
-BLOCKS = (256, 512, 1024)
-
-
-def _select(cb: QComboBox, label, fallback=None) -> None:
-    for i in range(cb.count()):
-        if label and cb.itemText(i).startswith(str(label)):
-            cb.setCurrentIndex(i)
-            return
-    if fallback is not None:
-        idx = cb.findData(fallback)
-        if idx >= 0:
-            cb.setCurrentIndex(idx)
+__all__ = ["BLOCKS", "MODES", "AudioSettingsDialog", "resolve_saved_devices"]
 
 
 def resolve_saved_devices(devices, settings) -> tuple[int | None, int | None, int | None]:
     """Zwraca (music_in, output, mic_in) na podstawie zapisanych etykiet."""
-    music_cb, out_cb, mic_cb = QComboBox(), QComboBox(), QComboBox()
-    _fill_combos(devices, music_cb, out_cb, mic_cb, settings)
-    return music_cb.currentData(), out_cb.currentData(), mic_cb.currentData()
+    return resolve_devices(devices, settings)
 
 
 def _fill_combos(devices, music_cb, out_cb, mic_cb, settings) -> None:
-    saved = {
-        "music": settings.value("audio/music"),
-        "out": settings.value("audio/output"),
-        "mic": settings.value("audio/mic"),
-    }
-    for cb in (music_cb, out_cb, mic_cb):
+    chosen = resolve_devices(devices, settings)
+    for cb, items, data in ((music_cb, music_items(devices), chosen[0]), (out_cb, output_items(devices), chosen[1]),
+                            (mic_cb, mic_items(devices), chosen[2])):
         cb.blockSignals(True)
         cb.clear()
-    mic_cb.addItem("— brak mikrofonu —", None)
-    for d in devices:
-        if d.max_in > 0:
-            music_cb.addItem(d.label, d.index)
-            mic_cb.addItem(d.label, d.index)
-        if d.max_out > 0:
-            out_cb.addItem(f"{d.label} ({d.max_out} kan.)", d.index)
-    _select(music_cb, saved["music"], find_cable_output(devices))
-    default_out = wasapi_default_output()
-    dev = next((d for d in devices if d.index == default_out), None)
-    if dev is None or "CABLE" in dev.name.upper():
-        default_out = next((d.index for d in devices if d.max_out > 0 and "CABLE" not in d.name.upper()), None)
-    _select(out_cb, saved["out"], default_out)
-    _select(mic_cb, saved["mic"])
-    for cb in (music_cb, out_cb, mic_cb):
+        for text, value in items:
+            cb.addItem(text, value)
+        idx = cb.findData(data)
+        cb.setCurrentIndex(max(0, idx))
         cb.blockSignals(False)
 
 
@@ -97,13 +73,27 @@ class AudioSettingsDialog(QDialog):
         refresh.clicked.connect(self.refresh_devices)
         self.tray_box = QCheckBox("Minimalizuj do zasobnika")
         self.tray_box.setChecked(tray_checked)
+        self.music_pair = QComboBox()
+        self.mic_chan = QComboBox()
+        self.preset_combo = QComboBox()
+        self._pending_ways: int | None = None
+        self.mirror_box = QCheckBox("Symulacja: kopia na wyjścia 3–4 (np. słuchawki Scarlett 4i4)")
+        self.mirror_box.setChecked(settings.value("audio/sim_mirror", "false") in (True, "true"))
+        self.hint = QLabel("")
+        self.hint.setWordWrap(True)
+        self.hint.setProperty("role", "caption")
         form.addRow("Muzyka:", self.music_combo)
+        form.addRow("Kanały muzyki:", self.music_pair)
         form.addRow("Wyjście:", self.out_combo)
+        form.addRow("Gotowy układ:", self.preset_combo)
+        form.addRow("", self.mirror_box)
         form.addRow("Mikrofon:", self.mic_combo)
+        form.addRow("Kanał mikrofonu:", self.mic_chan)
         form.addRow("Tryb:", self.mode_combo)
         form.addRow("Blok:", self.block_combo)
         form.addRow("", refresh)
         form.addRow("", self.tray_box)
+        form.addRow("", self.hint)
         root.addLayout(form)
 
         multi = QGroupBox("Multi: mapowanie kanałów")
@@ -124,19 +114,72 @@ class AudioSettingsDialog(QDialog):
 
         self.out_combo.currentIndexChanged.connect(self._on_output_changed)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        self.music_combo.currentIndexChanged.connect(self._on_music_changed)
+        self.mic_combo.currentIndexChanged.connect(self._on_mic_changed)
+        self.preset_combo.activated.connect(self._apply_preset)
         self.refresh_devices()
 
     def refresh_devices(self) -> None:
         self.devices = list_devices()
         _fill_combos(self.devices, self.music_combo, self.out_combo, self.mic_combo, self.settings)
         self._on_output_changed()
+        self._on_music_changed(initial=True)
+        self._on_mic_changed(initial=True)
 
     def _device(self, index):
         return next((d for d in self.devices if d.index == index), None)
 
     def _on_output_changed(self, *_):
         dev = self._device(self.out_combo.currentData())
-        self.channel_map.set_device_channels(dev.max_out if dev else 0)
+        n = dev.max_out if dev else 0
+        self.channel_map.set_device_channels(n)
+        self.preset_combo.clear()
+        self.preset_combo.addItem("— własny —", None)
+        for p in presets_for(n):
+            self.preset_combo.addItem(p.label, p.key)
+        self.preset_combo.setEnabled(self.preset_combo.count() > 1)
+        self.mirror_box.setEnabled(n >= 4)
+        self._update_hint()
+
+    def _on_music_changed(self, *_, initial: bool = False):
+        dev = self._device(self.music_combo.currentData())
+        self.music_pair.clear()
+        for first, label in input_pairs(dev.max_in if dev else 2):
+            self.music_pair.addItem(label, first)
+        saved = int(self.settings.value("audio/music_offset", 0)) if initial else 0
+        idx = self.music_pair.findData(saved)
+        self.music_pair.setCurrentIndex(max(0, idx))
+        self.music_pair.setEnabled(self.music_pair.count() > 1)
+        self._update_hint()
+
+    def _on_mic_changed(self, *_, initial: bool = False):
+        dev = self._device(self.mic_combo.currentData())
+        self.mic_chan.clear()
+        for i in range(dev.max_in if dev else 1):
+            self.mic_chan.addItem(f"Wejście {i + 1}", i)
+        saved = int(self.settings.value("audio/mic_channel", 0)) if initial else 0
+        idx = self.mic_chan.findData(saved)
+        self.mic_chan.setCurrentIndex(max(0, idx))
+        self.mic_chan.setEnabled(dev is not None and self.mic_chan.count() > 1)
+
+    def _apply_preset(self, *_):
+        key = self.preset_combo.currentData()
+        if key is None:
+            return
+        p = preset(key)
+        self.mode_combo.setCurrentIndex([m for m, _ in MODES].index(p.mode))
+        if p.mode == "multi":
+            self._pending_ways = p.ways_index
+            self.channel_map.set_ways_override(p.ways_index)
+            self.channel_map.set_channel_map(p.channel_map)
+        self.mirror_box.setChecked(p.sim_mirror)
+        self._update_hint(p.note)
+
+    def _update_hint(self, note: str = "") -> None:
+        tips = hints(self.devices, self.music_combo.currentData(), self.out_combo.currentData(),
+                     int(self.music_pair.currentData() or 0), note)
+        self.hint.setText("\n".join(tips))
+        self.hint.setVisible(bool(tips))
 
     def _on_mode_changed(self, *_):
         self.channel_map.set_mode(self.mode_combo.currentData())
@@ -150,6 +193,9 @@ class AudioSettingsDialog(QDialog):
             fs=self.fs,
             block=self.block_combo.currentData(),
             channel_map=self.channel_map.channel_map(),
+            sim_mirror=self.mirror_box.isEnabled() and self.mirror_box.isChecked(),
+            music_offset=int(self.music_pair.currentData() or 0),
+            mic_channel=int(self.mic_chan.currentData() or 0),
         )
 
     def persist(self) -> None:
@@ -163,3 +209,8 @@ class AudioSettingsDialog(QDialog):
 
         s.setValue("audio/channel_map", json.dumps(self.channel_map.channel_map()))
         s.setValue("ui/minimize_to_tray", "true" if self.tray_box.isChecked() else "false")
+        if self._pending_ways is not None:
+            self.bridge.store.set("xo.ways", self._pending_ways, source="gui")
+        s.setValue("audio/sim_mirror", "true" if self.mirror_box.isChecked() else "false")
+        s.setValue("audio/music_offset", int(self.music_pair.currentData() or 0))
+        s.setValue("audio/mic_channel", int(self.mic_chan.currentData() or 0))

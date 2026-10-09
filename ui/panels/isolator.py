@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from dsp.isolator import BAND_LABELS, BANDS
+
 from ..widgets import MomentaryButton, ParamSlider
 from .base import Panel, hbox
 

@@ -10,12 +10,21 @@ from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 ROOT = Path(SPECPATH)
 
 datas = [(str(ROOT / "assets" / "icon.ico"), "assets")]
+# interfejs QML (pliki .qml obok modułu ui.quick) i opcjonalne czcionki OFL
+datas += [(str(ROOT / "ui" / "quick" / "qml" / "*.qml"), "ui/quick/qml")]
+if any((ROOT / "assets" / "fonts").glob("*.[ot]tf")):
+    datas += [(str(ROOT / "assets" / "fonts" / "*.*tf"), "assets/fonts")]
 binaries = []
 hiddenimports = [
     "PySide6.QtCore",
     "PySide6.QtGui",
     "PySide6.QtWidgets",
     "PySide6.QtNetwork",
+    "PySide6.QtQml",
+    "PySide6.QtQuick",
+    "PySide6.QtQuickWidgets",
+    "PySide6.QtQuickControls2",
+    "ui.quick.view",
     "sounddevice",
     "soundfile",
     "numpy",

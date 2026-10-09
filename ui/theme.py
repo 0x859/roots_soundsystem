@@ -5,8 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPixmap, QBrush, QPen
-from PySide6.QtCore import Qt, QRectF
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPalette, QPen, QPixmap
 
 RED = QColor("#d62828")
 GOLD = QColor("#f7b801")

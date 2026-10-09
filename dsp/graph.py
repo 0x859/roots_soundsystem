@@ -32,6 +32,18 @@ def all_specs() -> list[ParamSpec]:
     return specs + OUT_PARAMS
 
 
+def _dsp_switches() -> tuple[str, ...]:
+    return tuple(s.key for s in all_specs() if s.key.endswith(".enabled"))
+
+
+DSP_SWITCHES = _dsp_switches()
+
+
+def bypass_values() -> dict[str, bool]:
+    """Wartości „czystego toru”: wszystkie moduły DSP wyłączone (zwrotnica, limitery i master zostają)."""
+    return {k: False for k in DSP_SWITCHES}
+
+
 def default_channel_map(ways=ALL_WAYS) -> dict[str, tuple[int, int]]:
     return {w: (2 * i, 2 * i + 1) for i, w in enumerate(ways)}
 
@@ -129,7 +141,7 @@ class SignalChain:
     def _on_params(self, changed: dict[str, Any], source: Any) -> None:
         touched = set()
         for key in changed:
-            for prefix, mod in self.modules.items():
+            for prefix in self.modules:
                 if key.startswith(prefix):
                     touched.add(prefix)
         for prefix in touched:

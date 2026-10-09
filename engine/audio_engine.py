@@ -9,9 +9,10 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from dsp.common import RingBuffer
-from dsp.graph import SignalChain, validate_channel_map
 from dsp.crossover import WAYS_BY_COUNT
+from dsp.graph import SignalChain, validate_channel_map
 
+from .devices import fit_channels
 from .params import ParamStore
 
 try:
@@ -52,6 +53,9 @@ class EngineConfig:
     block: int = 512
     channel_map: dict[str, tuple[int, int]] = field(default_factory=dict)
     out_channels: int = 2
+    sim_mirror: bool = False  # Symulacja: kopia 1-2 na kolejne pary wyjść (np. słuchawki 3-4 w Scarlett 4i4)
+    music_offset: int = 0  # pierwszy kanał wejścia muzyki (4 = Loopback 5-6 w Scarlett 4i4)
+    mic_channel: int = 0  # kanał wejścia mikrofonu (0 = wejście 1)
 
 
 @dataclass
@@ -128,6 +132,8 @@ class AudioEngine:
         self._primed = False
         self._drops = 0
         self._in_channels = 2
+        self._in_offset = 0
+        self._mic_col = 0
         self._lost = False
 
     @property
@@ -164,9 +170,10 @@ class AudioEngine:
             if problems:
                 raise EngineError("Niepoprawne mapowanie kanałów:\n" + "\n".join(problems))
         else:
-            cfg.out_channels = 2
-            if out_dev["max_output_channels"] < 2:
+            max_out = int(out_dev["max_output_channels"])
+            if max_out < 2:
                 raise EngineError("Urządzenie wyjściowe musi mieć co najmniej 2 kanały.")
+            cfg.out_channels = 4 if cfg.sim_mirror and max_out >= 4 else 2
 
         self.config = cfg
         self.stats = EngineStats()
@@ -180,19 +187,24 @@ class AudioEngine:
         extra = _wasapi_settings()
         try:
             in_dev = sd.query_devices(cfg.music_in)
-            in_ch = min(2, int(in_dev["max_input_channels"]))
-            if in_ch < 1:
+            max_in = int(in_dev["max_input_channels"])
+            if max_in < 1:
                 raise EngineError("Wybrane wejście muzyki nie ma kanałów wejściowych.")
+            offset = cfg.music_offset if 0 <= cfg.music_offset < max_in else 0
+            in_ch = min(2, max_in - offset)
             self._in_channels = in_ch
+            self._in_offset = offset
             self._in_stream = sd.InputStream(
-                device=cfg.music_in, channels=in_ch, samplerate=cfg.fs, blocksize=cfg.block,
+                device=cfg.music_in, channels=offset + in_ch, samplerate=cfg.fs, blocksize=cfg.block,
                 dtype="float32", callback=self._in_cb, extra_settings=extra, latency="low",
             )
             if cfg.mic_in is not None:
                 self._mic_ring = RingBuffer(cap, 1)
                 self._mic_buf = np.zeros((cfg.block, 1), dtype=np.float32)
+                mic_max = int(sd.query_devices(cfg.mic_in)["max_input_channels"])
+                self._mic_col = cfg.mic_channel if 0 <= cfg.mic_channel < mic_max else 0
                 self._mic_stream = sd.InputStream(
-                    device=cfg.mic_in, channels=1, samplerate=cfg.fs, blocksize=cfg.block,
+                    device=cfg.mic_in, channels=self._mic_col + 1, samplerate=cfg.fs, blocksize=cfg.block,
                     dtype="float32", callback=self._mic_cb, extra_settings=extra, latency="low",
                 )
             self._out_stream = sd.OutputStream(
@@ -251,13 +263,17 @@ class AudioEngine:
     def _in_cb(self, indata, frames, t, status) -> None:
         if status:
             self.stats.status_flags += 1
-        data = indata if self._in_channels == 2 else np.repeat(indata, 2, axis=1)
+        off = self._in_offset
+        data = indata[:, off : off + self._in_channels]
+        if self._in_channels == 1:
+            data = np.repeat(data, 2, axis=1)
         self._music_ring.write(data)
 
     def _mic_cb(self, indata, frames, t, status) -> None:
         ring = self._mic_ring
         if ring is not None:
-            ring.write(indata)
+            col = self._mic_col
+            ring.write(indata[:, col : col + 1])
 
     def _out_cb(self, outdata, frames, t, status) -> None:
         t0 = time.perf_counter()
@@ -296,7 +312,7 @@ class AudioEngine:
             mic = self._mic_buf
         try:
             out = chain.process(self._music_buf, mic)
-            outdata[:] = out.astype(np.float32, copy=False)
+            outdata[:] = fit_channels(out, outdata.shape[1]).astype(np.float32, copy=False)
         except Exception:
             outdata.fill(0)
             self.stats.callback_errors += 1

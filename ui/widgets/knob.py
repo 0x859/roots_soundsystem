@@ -15,7 +15,7 @@ SPAN_DEG = 270.0
 
 
 class _Dial(QWidget):
-    def __init__(self, knob: "Knob", size: int):
+    def __init__(self, knob: Knob, size: int):
         super().__init__()
         self.knob = knob
         self._size = size

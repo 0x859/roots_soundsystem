@@ -1,7 +1,7 @@
 import numpy as np
+from conftest import FS
 from scipy import signal
 
-from conftest import FS
 from dsp.eq12 import BANDS, Equalizer, peaking_sos
 
 

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QComboBox, QGridLayout, QLabel, QWidget
 
 from dsp.crossover import ALL_WAYS, WAY_LABELS, WAYS_BY_COUNT
 from dsp.graph import default_channel_map, validate_channel_map
+
 from ..theme import WAY_COLORS
 from .controls import make_control
 
@@ -74,11 +75,19 @@ class ChannelMapEditor(QWidget):
     def channel_map(self) -> dict[str, tuple[int, int]]:
         return dict(self._map)
 
+    def set_ways_override(self, ways_index: int | None) -> None:
+        """Liczba dróg wybrana w oknie, zanim trafi do parametrów (po zatwierdzeniu)."""
+        self._ways_override = ways_index
+        self._validate()
+
     def active_ways(self):
-        return WAYS_BY_COUNT[(2, 3, 4)[int(self.bridge.get("xo.ways"))]]
+        idx = getattr(self, "_ways_override", None)
+        if idx is None:
+            idx = int(self.bridge.get("xo.ways"))
+        return WAYS_BY_COUNT[(2, 3, 4)[idx]]
 
     def _emit_map(self) -> None:
-        self._map = {w: (l.currentData(), r.currentData()) for w, (l, r) in self.combos.items()}
+        self._map = {w: (left.currentData(), right.currentData()) for w, (left, right) in self.combos.items()}
         self._validate()
         self.mapChanged.emit(self.channel_map())
 

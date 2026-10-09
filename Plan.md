@@ -42,22 +42,28 @@ todos:
     content: Zaproponuj darmowe wtyczki VST z efektami
     status: completed
   - id: dev-setup
-    content: "Etap 2.1: srodowisko VS Code (.vscode, pyproject z ruff i pytest, requirements-dev, .editorconfig), git init"
-    status: in_progress
+    content: "Etap 2.1: środowisko VS Code (.vscode, pyproject z ruff i pytest, requirements-dev, .editorconfig), git init"
+    status: completed
   - id: quality
-    content: "Etap 2.1: porzadki kodu (ruff, typy), testy preampu, zwrotnicy w czasie, presetow i silnika bez urzadzen"
-    status: pending
+    content: "Etap 2.1: porządki kodu (ruff, typy), testy preampu, zwrotnicy w dziedzinie czasu, presetów i silnika bez urządzeń"
+    status: in_progress
   - id: dsp-fixes
-    content: "Etap 2.2: poprawki DSP - kill izolatora >= 60 dB, jakosc echa i sprezyny, wydajnosc"
+    content: "Etap 2.2: poprawki DSP – kill izolatora >= 60 dB, jakość echa i sprężyny, wydajność"
     status: pending
   - id: ux-design
-    content: "Etap 2.3: projekt najwygodniejszego interfejsu (makiety, przeplyw pracy na zywo vs konfiguracja)"
+    content: "Etap 2.3: projekt najwygodniejszego interfejsu (makiety, przepływ pracy na żywo vs konfiguracja)"
     status: pending
   - id: qml
-    content: "Etap 2.4: przejscie GUI na QML (most Python-QML na ParamStore, komponenty pokretel, migracja paneli)"
-    status: pending
+    content: "Etap 2.4: przejście GUI na QML z układem opisanym w JSON (karty, kontrolki, motyw) i trybem edycji układu"
+    status: in_progress
+  - id: midimix
+    content: "Etap 2.4: profil Akai MIDImix – mapowanie domyślne, LED-y (wyjście MIDI), warstwa SHIFT, przejęcie (pickup), akcje (sceny, tap)"
+    status: completed
+  - id: scarlett
+    content: "Etap 2.4: Focusrite Scarlett 4i4 3rd gen – presety wyjść (Symulacja 1-2, Multi 2x stereo / 4x mono), mikrofon z wejścia 1, opcjonalnie Loopback zamiast VB-Cable"
+    status: completed
   - id: features
-    content: "Etap 2.5: nowe funkcje - nagrywanie setu do WAV, odtwarzacz plikow, ewentualnie hostowanie VST"
+    content: "Etap 2.5: nowe funkcje – nagrywanie setu do WAV, odtwarzacz plików, ewentualnie hostowanie VST"
     status: pending
 isProject: false
 ---
@@ -172,24 +178,58 @@ flowchart LR
 - Tryb Multi: sprawdzenie liczby kanałów urządzenia, blokada startu przy niepoprawnym mapowaniu
 - Przekroczenie budżetu CPU: ostrzeżenie i propozycja zwiększenia bloku lub wyłączenia splotu
 
-## Etap 2: rozwoj (od 2026-10-08)
+## Etap 2: rozwój (od 2026-10-08)
 
-Kolejnosc: najpierw porzadki i testy (bezpieczna podstawa), potem poprawki DSP, projekt interfejsu, migracja na QML i nowe funkcje.
+Kolejność: najpierw porządki i testy (bezpieczna podstawa), potem poprawki DSP, projekt interfejsu, migracja na QML i nowe funkcje.
 
-### Stan wyjsciowy
-- Testy DSP: 37/37 przechodza; wydajnosc pelnego toru ok. 33% czasu bloku (bez numba).
-- ruff: 35 uwag, glownie kolejnosc importow i `zip` bez `strict`; brak powaznych bledow.
-- Brak repozytorium git - do zalozenia przed wiekszymi zmianami.
-- UI jest na Qt Widgets, nie QML (opis projektu zaklada QML).
+### Stan wyjściowy
+- Testy DSP: 37/37 przechodzą; wydajność pełnego toru ok. 33% czasu bloku (bez numba).
+- ruff: 35 uwag, głównie kolejność importów i `zip` bez `strict`; brak poważnych błędów.
+- Brak repozytorium git – do założenia przed większymi zmianami.
+- UI jest na Qt Widgets, nie QML (opis projektu zakłada QML).
+- Po porządkach (2026-10-08): ruff czysty; 163 testy bez GUI/MIDI przechodzą (nowe: test_params, test_presets, test_preamp_xo, test_engine). Do zrobienia w 2.1: typy (Pylance basic).
 
-### Rozbieznosci plan vs stan
-- Kill izolatora: plan zaklada >= 60 dB, osiagniete 38-57 dB przy 5 waskich pasmach.
-- MIDI: zamiast `python-rtmidi` backend `pygame-ce` (brak kol dla Pythona 3.14).
+### Rozbieżności plan vs stan
+- Kill izolatora: plan zakłada >= 60 dB, osiągnięte 38–57 dB przy 5 wąskich pasmach.
+- MIDI: zamiast `python-rtmidi` backend `pygame-ce` (brak kół dla Pythona 3.14).
 
-### Interfejs (2.3-2.4)
-- Dwa tryby pracy: LIVE (duze kontrolki, gesty dubowe, minimum rozpraszaczy) i KONFIGURACJA (urzadzenia, zwrotnica, mapowanie, miejsce).
-- QML: `ParamStore` wystawiony jako model/obiekt Pythona, komponenty Knob, Fader, MomentaryButton, Meter; wykresy przez QtGraphs lub obraz z pyqtgraph.
-- Migracja panel po panelu, z zachowaniem dzialajacej wersji Widgets do konca etapu.
+### Interfejs (2.3–2.4)
+- Dwa tryby pracy: LIVE (duże kontrolki, gesty dubowe, minimum rozpraszaczy) i KONFIGURACJA (urządzenia, zwrotnica, mapowanie, miejsce).
+- QML: `ParamStore` wystawiony jako obiekt/model Pythona; komponenty Knob, Fader, MomentaryButton, Meter; wykresy przez QtGraphs lub obraz z pyqtgraph.
+- Migracja panel po panelu, z zachowaniem działającej wersji Widgets do końca etapu.
+
+### Personalizacja interfejsu (decyzja 2026-10-08)
+- Kierunek wizualny zatwierdzony: ciemny stół, złoto (tor), turkus (efekty), czerwień (kill/stop).
+- Każdy aspekt do dostosowania przez użytkownika. Układ to dane, nie kod: profil JSON w `%APPDATA%\RootsSoundsystem\layouts\`.
+- Profil układu: lista kart (tytuł, kolor, szerokość 1–3 kolumn, widoczność LIVE/KONFIGURACJA, próg zwijania „Więcej”), w każdej karcie kontrolki (parametr z `ParamStore`, typ: gałka/suwak/przycisk/pad/miernik/wartość, rozmiar S/M/L, etykieta, kolor, skrót klawiszowy), pasek padów (zawartość, kolejność, położenie góra/dół), motyw (kolory, czcionki, skala 80–160%, gęstość, styl gałek).
+- Tryb „Edycja układu”: przeciąganie kart i kontrolek, inspektor (kontrolka/karta/motyw), wyszukiwarka parametrów, cofanie, import/eksport profili.
+- Renderowanie w QML: `Repeater` po modelu z JSON, siatka kart z liczbą kolumn liczoną z szerokości okna (responsywność zamiast skalowania).
+
+### QML – stan (2026-10-08, pierwszy przyrost)
+- `ui/layout_profile.py` (bez Qt): profil domyślny wg makiet (7 kart LIVE, 5 kart KONFIGURACJA, 9 padów, skróty, motyw), walidacja/normalizacja, zapis w `%APPDATA%\RootsSoundsystem\layouts\`, import/eksport. Cele kontrolek: parametr `ParamStore`, akcja `action:*` (jak w MIDI) lub widok `view:*` (mierniki, miernik mikrofonu, pamięci syreny).
+- `ui/quick/`: `QmlParams`/`QmlParam` (parametr jako obiekt z `value/norm/text`, zmiany przez `ParamBridge`, więc MIDI learn działa), `LayoutModel` (edycja z cofaniem, autozapis, profile) + `QmlTheme` (kolory, czcionki z zamiennikami Bahnschrift/Consolas, skala, gęstość), `QmlSession` (start/stop, sceny, status, mierniki, polecenia do okna), `QuickDesk` (QQuickWidget). W QML kontekst nazywa się `Profile` (nie `Layout` – kolizja z QtQuick.Layouts).
+- QML (`ui/quick/qml/`): Knob, Fader (z KILL), ParamButton (przełącznik / chwilowy: lewy = przytrzymanie, prawy = zatrzaśnięcie / akcja), ValueSelect, MetersView, MicMeter, SirenMemories, Card (grupy rzędów wg rozmiaru, „Więcej”), PadBar, LiveHeader, EditHeader, Inspector (KONTROLKA/KARTA/PADY/MOTYW + wyszukiwarka), Main (siatka, przeciąganie kart i kontrolek).
+- `MainWindow`: stos widoków (QML domyślnie, klasyczny w menu Widok, Ctrl+L/Ctrl+K), skróty klawiszowe z profilu (`_trigger`), wspólne tap tempo i pamięci syreny (`ui/dub_actions.py`). Przy błędzie ładowania QML zostaje stół klasyczny.
+- Testy: `tests/test_layout_profile.py`, `tests/test_quick.py` (ładowanie QML bez ostrzeżeń, edycja, okno w trybie QML); testy stołu klasycznego wymuszają `ui/view=classic`.
+- Przyrost 2 (2026-10-08): swobodniejsza edycja układu – wstawianie przed/po (wskaźnik), strefa „na koniec”, prowadnice kolumn, zmiana rozmiaru karty krawędziami/rogiem (szerokość 1–4, wysokość 1–3 rzędy = `rowSpan`, podgląd), menu karty (⋯ / prawy przycisk; żyje w `Main.qml`, bo karty są przebudowywane po każdej zmianie), stała liczba kontrolek w rzędzie (`cols`), zwijanie kart w LIVE (`collapsed`, bez historii cofania), uchwyt S/M/L kontrolki, klawiatura w edycji, regulowana szerokość inspektora, ramki kontrolek (`theme.tiles`).
+- KONFIGURACJA w QML: `view:devices` (trasy, tryb Symulacja/Multi, blok, okno Audio), wykresy `view:response`/`view:crossover`/`view:spectrum` (krzywe liczone w `ui/quick/plots.py`, rysowane `Shape`/`PathPolyline` – bez QtGraphs), znacznik pickup MIDI na gałkach i suwakach.
+- Przyrost 3 (2026-10-08): karta „Urządzenia i kanały” w QML (`ui/quick/audio.py` – wersja robocza + ZASTOSUJ; logika wspólna z oknem Audio w `ui/audio_config.py`), własna IR (`view:room_ir`), presety EQ (`view:eq_presets`), dowolna wysokość kart w px (`height`, przewijane wnętrze), czysty tor przy starcie (`startup/dsp`, nowy przełącznik `sim.enabled` – modele kolumn), przycisk DSP n/9 (`action:dsp_toggle`), autotest paczki `--selftest` – EXE zbudowany i sprawdzony (QML bez błędów, 8 urządzeń).
+- Do zrobienia: odchudzenie paczki EXE (727 MB – wykluczyć nieużywane moduły Qt: WebEngine, 3D, Multimedia…), czcionki Barlow/IBM Plex w `assets/fonts`, docelowo okno w czystym QML i usunięcie Widgets.
+
+### Akai MIDImix
+- Fabryczne komunikaty (kanał 1): gałki CC 16–18, 20–22, 24–26, 28–30, 46–48, 50–52, 54–56, 58–60; suwaki CC 19, 23, 27, 31, 49, 53, 57, 61; master CC 62. Mute: nuty 1, 4, … 22; Rec Arm: nuty 3, 6, … 24; Solo (trzymane) zamienia rząd Mute na nuty 2, 5, … 23; Bank Left/Right: nuty 25/26; Solo: nuta 27.
+- LED-y Mute (bursztyn) i Rec Arm (czerwone): note-on 127 zapala, 0 gasi – wymaga otwarcia portu wyjściowego MIDI (obecnie tylko wejście).
+- Mapowanie domyślne: suwaki 1–5 = izolator (sub…top), Mute 1–5 = KILL z LED; suwaki 6–8 = powrót echa, powrót sprężyny, mikrofon; master = `out.master`. Gałki: sweep/preamp/echo/sendy/syrena/mic/miejsce/echo. Rec Arm: THROW, SYRENA, CRASH, TAP, TALKOVER, MONO, pamięć syreny, MUTE. Bank L/R = poprzednia/następna scena. SOLO = SHIFT (druga warstwa gałek).
+- Przejęcie (pickup): po zmianie sceny gałka/suwak steruje dopiero po minięciu bieżącej wartości; GUI pokazuje pozycję kontrolera.
+- Mapowanie ogólne: cel to parametr albo akcja (scena ±, tap, pamięć syreny, start/stop); profile MIDI zapisywane jak sceny; learn zostaje.
+- Zrobione (2026-10-08): `engine/midi_profiles.py` (profil MIDImix, wykrywany po nazwie portu), `engine/midi.py` (SHIFT, pickup, akcje, LED-y, format JSON v2 zgodny wstecz), menu MIDI → Profil kontrolera / Przejęcie wartości. Testy: `tests/test_midimix.py` bez sprzętu.
+
+### Focusrite Scarlett 4i4 3rd gen
+- Komputer widzi: wejścia 1–4 (sprzęt) + 5–6 Loopback (tylko 44.1/48 i 88.2/96 kHz); wyjścia 1–2 i 3–4, przy czym słuchawki niosą wyjścia 3–4.
+- Presety wyjścia: Symulacja → 1–2 (monitory) + kopia na 3–4 (słuchawki); Multi 2 drogi stereo → bass 1/2, top 3/4; Multi 4 drogi mono → sub 1, bass 2, mid 3, top 4 (ostrzeżenie: słuchawki = drogi 3–4).
+- Mikrofon MC z wejścia 1 (XLR, phantom). Gdy muzyka, mikrofon i wyjście są na tym samym urządzeniu, jeden strumień dupleks usuwa dryf zegarów i bufor kołowy.
+- Loopback jako źródło muzyki zamiast VB-Cable – do sprawdzenia w praktyce (ryzyko pętli, gdy aplikacja gra na wyjścia objęte loopbackiem); VB-Cable zostaje jako domyślne.
+- Zrobione (2026-10-08): `engine/devices.py` (gotowe układy wyjść dla kart 4-kanałowych, kopia Symulacji na 3–4), wybór pary kanałów muzyki (np. Loopback 5–6) i kanału mikrofonu w oknie Audio. Do zrobienia: jeden strumień dupleks, gdy wejście i wyjście to ta sama karta.
 
 ## Weryfikacja
 - EQ12: przy 0 dB wyjście równe wejściu, przy +6 dB na 1 kHz około +6 dB

@@ -7,6 +7,7 @@ import os
 import re
 from pathlib import Path
 
+from dsp.graph import bypass_values
 from engine.params import ParamStore
 
 from .builtin import EQ_PRESETS, SCENES, eq_values
@@ -47,6 +48,21 @@ def _delete(kind: str, name: str) -> None:
     p = _dir(kind) / f"{_safe(name)}.json"
     if p.exists():
         p.unlink()
+
+
+# --- stan przy starcie ---
+STARTUP_MODES = ("clean", "last")  # czysty tor (moduły DSP wyłączone) | ostatni stan
+
+
+def restore_state(store: ParamStore, raw: str | None, mode: str = "clean") -> None:
+    """Wczytuje zapisany stan; w trybie „clean” wyłącza wszystkie moduły DSP (ustawienia gałek zostają)."""
+    if raw:
+        try:
+            store.load(json.loads(raw))
+        except (TypeError, ValueError):
+            pass
+    if mode != "last":
+        store.set_many(bypass_values())
 
 
 # --- sceny ---

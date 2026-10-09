@@ -49,7 +49,7 @@ def write_ico(path: Path, images: list[QImage]) -> None:
     offset = 6 + 16 * len(pngs)
     out = bytearray()
     out += struct.pack("<HHH", 0, 1, len(pngs))
-    for im, data in zip(images, pngs):
+    for im, data in zip(images, pngs, strict=True):
         w = 0 if im.width() >= 256 else im.width()
         h = 0 if im.height() >= 256 else im.height()
         out += struct.pack("<BBBBHHII", w, h, 0, 0, 1, 32, len(data), offset)
@@ -69,7 +69,7 @@ def main() -> None:
         images.append(im)
     write_ico(dest, images)
     print(f"Zapisano {dest} ({dest.stat().st_size} B)")
-    app  # keep reference for linters
+    del app  # QApplication musi istnieć do końca rysowania
 
 
 if __name__ == "__main__":

@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import json
-import time
-
 from PySide6.QtCore import QSettings, QSize, Qt
-from PySide6.QtWidgets import QApplication, QGroupBox, QGridLayout, QHBoxLayout, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QGridLayout, QGroupBox, QHBoxLayout, QPushButton, QWidget
 
-from dsp.fx_siren import SIREN_MEMORY_KEYS
+from ..dub_actions import N_MEMORIES, TapTempo, recall_siren_memory, store_siren_memory
 from ..theme import GREEN, RED
 from ..widgets import MomentaryButton, make_control
 
-N_MEMORIES = 4
-TAP_TIMEOUT_S = 2.0
+__all__ = ["N_MEMORIES", "DubPanel"]
 
 
 class _Box(QGroupBox):
@@ -29,7 +25,7 @@ class DubPanel(QWidget):
         super().__init__()
         self.bridge = bridge
         self.settings = settings
-        self._taps: list[float] = []
+        self._tap = TapTempo(bridge.store)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self._echo())
@@ -118,26 +114,10 @@ class DubPanel(QWidget):
             self.recall_memory(i)
 
     def store_memory(self, i: int) -> None:
-        data = {k: self.bridge.get(k) for k in SIREN_MEMORY_KEYS}
-        self.settings.setValue(f"siren/mem{i}", json.dumps(data))
+        store_siren_memory(self.bridge.store, self.settings, i)
 
     def recall_memory(self, i: int) -> None:
-        raw = self.settings.value(f"siren/mem{i}")
-        if not raw:
-            return
-        try:
-            data = json.loads(raw)
-        except (TypeError, ValueError):
-            return
-        self.bridge.store.set_many({k: data[k] for k in SIREN_MEMORY_KEYS if k in data}, source="gui")
+        recall_siren_memory(self.bridge.store, self.settings, i)
 
     def tap_tempo(self) -> None:
-        now = time.monotonic()
-        self._taps = [t for t in self._taps if now - t < TAP_TIMEOUT_S] + [now]
-        if len(self._taps) >= 2:
-            diffs = [b - a for a, b in zip(self._taps, self._taps[1:])]
-            bpm = 60.0 / (sum(diffs) / len(diffs))
-            values = {"echo.bpm": bpm}
-            if self.bridge.get("echo.sync") == 0:
-                values["echo.time"] = 60000.0 / bpm
-            self.bridge.store.set_many(values, source="gui")
+        self._tap.tap()

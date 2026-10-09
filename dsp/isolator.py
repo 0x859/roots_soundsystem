@@ -49,7 +49,7 @@ class Isolator:
             self.splitter = BandSplitter(self.fs, freqs, order, self.channels)
         elif freqs != self.splitter.freqs:
             self.splitter.set_freqs(freqs)
-        for ramp, b in zip(self.gains, BANDS):
+        for ramp, b in zip(self.gains, BANDS, strict=True):
             g = 0.0 if p[f"iso.kill.{b}"] else gain_from_db(float(p[f"iso.g.{b}"]), KILL_DB)
             ramp.set(g)
 
@@ -59,7 +59,7 @@ class Isolator:
         n = len(x)
         bands = self.splitter.process(x)
         y = np.zeros_like(x)
-        for band, ramp in zip(bands, self.gains):
+        for band, ramp in zip(bands, self.gains, strict=False):  # wątek audio
             g = ramp.block(n)
             if isinstance(g, float) and g == 0.0:
                 continue
@@ -70,6 +70,6 @@ class Isolator:
         if not self.enabled:
             return np.ones(len(freqs), dtype=complex)
         h = np.zeros(len(freqs), dtype=complex)
-        for r, ramp in zip(self.splitter.responses(freqs), self.gains):
+        for r, ramp in zip(self.splitter.responses(freqs), self.gains, strict=True):
             h += r * ramp.target
         return h

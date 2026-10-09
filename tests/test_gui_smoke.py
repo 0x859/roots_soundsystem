@@ -38,6 +38,7 @@ def window(app, tmp_path_factory):
 
     settings = QSettings(str(tmp / "settings.ini"), QSettings.IniFormat)
     settings.setValue("audio/output", "Speakers")
+    settings.setValue("ui/view", "classic")
     win = MainWindow(ParamStore(all_specs()), settings)
     win.scaler._timer.stop()
     win._midi_timer.stop()
@@ -103,7 +104,6 @@ def test_scenes_and_plots(window, app):
 
 
 def test_mode_switch_and_channel_map(window, app):
-    store = window.store
     from ui.widgets import ChannelMapEditor
 
     window.mode = "multi"
@@ -134,7 +134,7 @@ def test_live_knobs_sync_with_panels(window, app):
 
 
 def test_audio_settings_mapping_and_mode(window, app):
-    from ui.dialogs.audio_settings import MODES, BLOCKS
+    from ui.dialogs.audio_settings import BLOCKS, MODES
     from ui.widgets import ChannelMapEditor
 
     assert ("sim", "Symulacja (stereo)") in MODES

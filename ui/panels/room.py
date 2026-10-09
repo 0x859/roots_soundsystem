@@ -6,6 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFileDialog, QLabel, QPushButton
 
 from dsp.crossover import ALL_WAYS, WAY_LABELS
+
 from .base import Panel, hbox
 
 

@@ -39,6 +39,7 @@ PROFILE_LABELS = tuple(PROFILES[k]["label"] for k in PROFILE_KEYS)
 DEFAULT_PROFILE = {"sub": "scoop", "bass": "bassbin", "mid": "midhorn", "top": "tophorn"}
 
 PARAMS = [
+    ParamSpec("sim.enabled", "Modele kolumn", True, kind="bool"),
     ParamSpec("sim.cab_drive", "Kompresja głośników", 0.2, 0.0, 1.0, "%"),
     ParamSpec("sim.width", "Szerokość stereo", 0.6, 0.0, 1.0, "%"),
     ParamSpec("sim.mono_bass", "Mono sub/bass", True, kind="bool"),
@@ -81,8 +82,10 @@ class CabinetStack:
         self.sub_delay = DelayLine(channels)
         self.bassfeel = BassFeel(fs)
         self.bassfeel_amt = Ramp(0.0, 30, fs)
+        self.enabled = True
 
     def configure(self, p) -> None:
+        self.enabled = bool(p["sim.enabled"])
         for w in ALL_WAYS:
             key = PROFILE_KEYS[int(p[f"sim.cab.{w}"])]
             if key != self.profile[w]:
@@ -95,6 +98,12 @@ class CabinetStack:
         self.bassfeel_amt.set(float(p["sim.bassfeel"]))
 
     def process(self, ways: dict[str, np.ndarray], n: int) -> np.ndarray:
+        if not self.enabled:
+            # bez modeli: zwykła suma dróg (LR4 sumuje się płasko), bez kompresji, szerokości i bass feel
+            out = np.zeros((n, self.channels))
+            for x in ways.values():
+                out += x
+            return out
         low = np.zeros((n, self.channels))
         high = np.zeros((n, self.channels))
         k = self.drive_k
@@ -122,6 +131,8 @@ class CabinetStack:
         return out
 
     def responses(self, freqs: np.ndarray) -> dict[str, np.ndarray]:
+        if not self.enabled:
+            return {w: np.ones(len(freqs), dtype=complex) for w in self.filters}
         return {w: response(f.sos, freqs, self.fs) for w, f in self.filters.items()}
 
 

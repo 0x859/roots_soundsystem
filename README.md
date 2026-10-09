@@ -39,6 +39,15 @@ Pakiet onedir (folder z EXE, ikoną i DLL-ami Qt / PortAudio / libsndfile):
 
 Wynik: `dist\RootsSoundsystem\RootsSoundsystem.exe` (ikona w zasobach EXE oraz kopia `icon.ico` obok). Skopiuj cały folder `RootsSoundsystem` — sam plik EXE nie wystarczy.
 
+Sprawdzenie paczki bez klikania (EXE nie ma konsoli, wynik trafia do pliku JSON; tymczasowe ustawienia, bez dźwięku):
+
+```powershell
+Start-Process .\dist\RootsSoundsystem\RootsSoundsystem.exe -ArgumentList "--selftest", "$env:TEMP\roots_selftest.json" -Wait
+Get-Content $env:TEMP\roots_selftest.json
+```
+
+`"ok": true` oznacza, że interfejs QML załadował się bez błędów, a ekrany LIVE, KONFIGURACJA i tryb edycji działają. To samo z kodu: `.\.venv\Scripts\python main.py --selftest wynik.json`.
+
 ## VB-Cable (przechwytywanie dźwięku systemu)
 
 1. Pobierz darmowy sterownik [VB-Cable](https://vb-audio.com/Cable/), rozpakuj i uruchom `VBCABLE_Setup_x64.exe` jako administrator. Uruchom ponownie komputer.
@@ -59,11 +68,40 @@ Zabezpieczenia: droga top jest zawsze filtrowana górnoprzepustowo (punkt podzia
 
 ## Obsługa
 
+### Nowy interfejs (QML)
+
+Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = tor sygnału, turkus = efekty, czerwień = kill/stop). Menu **Widok** przełącza między nim (`Ctrl+L`) a stołem klasycznym (`Ctrl+K`); wybór jest zapamiętywany.
+
+- **LIVE / KONFIGURACJA**: przełącznik w nagłówku. LIVE to karty do grania (preamp, echo, sprężyna, syrena, izolator, mikrofon, wyjście) i pasek padów; KONFIGURACJA – urządzenia i kanały, wykresy (odpowiedź toru, zwrotnica, analizator widma), zwrotnica, limitery, EQ 12 pasm z presetami, kolumny i miejsce (z wczytywaniem własnej IR), podział izolatora. Pełny stół klasyczny – przycisk w nagłówku KONFIGURACJI.
+- **Urządzenia i kanały** (KONFIGURACJA): muzyka i para kanałów (np. Loopback 5–6), wyjście i gotowe układy (Scarlett 4i4: Symulacja z kopią na słuchawki, Multi 2/3/4 drogi), mikrofon i jego wejście, tryb Symulacja/Multi, blok, mapowanie dróg na kanały L/R (jeden kanał = mono) z kontrolą błędów. Zmiany są robocze – do silnika trafiają po **ZASTOSUJ** (PRZYWRÓĆ cofa). Okno *Ustawienia audio…* nadal działa i pokazuje to samo.
+- **Czysty tor przy starcie**: domyślnie aplikacja startuje z wyłączonymi wszystkimi modułami DSP (preamp, mikrofon, echo, sprężyna, EQ, izolator, modele kolumn, miejsce) – muzyka przechodzi bez zmian, zostają tylko zwrotnica, ochrona (subsonic, limitery) i master. Ustawienia gałek są zapamiętane. Przycisk **DSP n/9** w nagłówku wyłącza wszystko albo przywraca poprzedni zestaw modułów (także akcja `action:dsp_toggle` dla skrótu/MIDI). Zmiana: karta Urządzenia → „Przy starcie aplikacji: CZYSTY TOR / OSTATNI STAN” albo menu Audio.
+- Kliknięcie tytułu karty zwija ją do samego nagłówka (stan jest zapamiętywany).
+- Przy kontrolerze MIDI z przejęciem wartości (pickup) niebieski znacznik na gałce/suwaku pokazuje położenie elementu kontrolera, dopóki nie „złapie” wartości.
+- Liczba kolumn kart zależy od szerokości okna – w wąskim oknie karty układają się jedna pod drugą zamiast się zmniejszać.
+- Karta z przełącznikiem **ON/OFF** w nagłówku włącza moduł; **WIĘCEJ · n** rozwija rzadziej używane kontrolki.
+- **✎ UKŁAD** – tryb edycji układu (wszystko można zmienić):
+  - przeciągnij kartę za `⋮⋮` lub kontrolkę, aby zmienić kolejność (także między kartami); niebieska kreska pokazuje miejsce wstawienia, strefa na dole przenosi kartę na koniec;
+  - przeciągnij prawą krawędź karty (szerokość 1–4 kolumn), dolną (dowolna wysokość w pikselach, dwuklik = automatyczna) albo złoty róg (oba naraz) – podgląd pokazuje nowy rozmiar; gdy karta jest niższa niż treść, wnętrze się przewija; prowadnice pokazują kolumny siatki;
+  - `⋯` lub prawy przycisk na karcie: menu (rozmiar, liczba kontrolek w rzędzie, ekran, kolor, zwinięcie, duplikat, usunięcie);
+  - złoty uchwyt S/M/L w rogu zaznaczonej kontrolki zmienia jej rozmiar;
+  - klawiatura: `←`/`→` przesuwa zaznaczoną kontrolkę lub kartę (`↑`/`↓` – karta o rząd), `Shift`+strzałki – rozmiar karty, `+`/`−` – rozmiar kontrolki, `Del` – usuń, `Ctrl+Z`/`Ctrl+Y` – cofnij/ponów, `Ctrl+D` – duplikuj kartę, `Esc` – odznacz / wyjdź;
+  - szerokość inspektora można zmienić, przeciągając uchwyt między stołem a inspektorem;
+  - inspektor **KONTROLKA**: cel (parametr, akcja `action:*` albo widok `view:*`), typ (gałka, suwak, przycisk, pad, wartość), rozmiar S/M/L, etykieta, kolor, skrót klawiszowy (kliknij pole i naciśnij klawisz), przypisanie MIDI (learn);
+  - **KARTA**: tytuł, szerokość 1–4 kolumn, wysokość (auto lub px, także `Shift+↑/↓`), rzędy siatki 1–3, liczba kontrolek w rzędzie, zwinięcie w LIVE, widoczność (LIVE/KONFIGURACJA/obie), zwijanie „Więcej”, kolor, przełącznik i informacja w nagłówku;
+  - **PADY**: zawartość i kolejność paska padów, położenie (dół/góra/ukryty), wysokość;
+  - **MOTYW**: skala 80–160%, gęstość, styl gałek, ramki kontrolek w trybie gry, minimalna szerokość karty, kolory, czcionki;
+  - wyszukiwarka u dołu dodaje parametr do zaznaczonej karty (albo pad);
+  - COFNIJ/PONÓW, profile układu (ZAPISZ JAKO, przełączanie, usuwanie), IMPORT/EKSPORT JSON, RESET do układu domyślnego.
+- Profile układu to pliki JSON w `%APPDATA%\RootsSoundsystem\layouts\` (zapis automatyczny).
+- Czcionki: interfejs używa *Barlow Condensed* i *IBM Plex Mono*, jeśli są zainstalowane albo leżą w `assets/fonts/` (licencja OFL); w przeciwnym razie Bahnschrift i Consolas z Windows.
+
+### Wspólne dla obu interfejsów
+
 - **Pokrętła**: przeciąganie w pionie lub kółko myszy, Shift = precyzyjnie, dwuklik = wartość domyślna.
 - **Przyciski chwilowe** (THROW, SYRENA, CRASH, KILL): lewy przycisk = aktywny przy przytrzymaniu, prawy = zatrzaśnięcie.
-- **Skróty**: `1`-`5` kill pasm izolatora, `Spacja` throw echa, `S` syrena, `D` crash sprężyny, `T` tap tempo, `M` mute, `F5`-`F8` pamięci syreny (Ctrl+klik na M1-M4 zapisuje).
-- **Pasek LIVE**: START/STOP, sceny, kill 1-5, THROW, SYRENA, CRASH, sweep HP/LP, master, mute i mierniki – zawsze na górze okna.
-- **Stół**: dwa rzędy bez poziomego paska narzędzi; wykresy są w pierwszym rzędzie po prawej. Przy mniejszym oknie stół skaluje się (dolna granica 0.7).
+- **Skróty** (domyślne, zmienialne w trybie ✎ UKŁAD): `1`-`5` kill pasm izolatora, `Spacja` throw echa, `S` syrena, `D` crash sprężyny, `T` tap tempo, `M` mute, `F5`-`F8` pamięci syreny (Ctrl+klik na M1-M4 zapisuje). W trybie edycji układu skróty są wyłączone.
+- **Pasek LIVE** (stół klasyczny): START/STOP, sceny, kill 1-5, THROW, SYRENA, CRASH, sweep HP/LP, master, mute i mierniki – zawsze na górze okna.
+- **Stół klasyczny**: dwa rzędy bez poziomego paska narzędzi; wykresy są w pierwszym rzędzie po prawej. Przy mniejszym oknie stół skaluje się (dolna granica 0.7).
 - **Sceny** (pasek LIVE): pełny stan toru; wbudowane: Neutralny, Roots warm, Steppers heavy, Dub echo chamber, Plener, Słuchawki (bass feel). Własne sceny i presety EQ są zapisywane jako JSON w `%APPDATA%\RootsSoundsystem\`.
 - **Urządzenia i tryb**: przycisk *Audio…* albo kliknięcie podsumowania w pasku stanu.
 - **Własna IR miejsca**: panel *Kolumny i miejsce* → *Wczytaj IR…*; plik jest resamplowany do częstotliwości pracy.
@@ -77,7 +115,8 @@ Zabezpieczenia: droga top jest zawsze filtrowana górnoprzepustowo (punkt podzia
 | `dsp/` | moduły DSP (biquady, EQ12, preamp, izolator, zwrotnica, efekty, mikrofon, kolumny, splot, limitery) i `graph.py` ze składającym je `SignalChain` |
 | `engine/` | rejestr parametrów, silnik audio WASAPI, sterowanie MIDI |
 | `presets/` | wbudowane sceny i presety EQ, zapis własnych |
-| `ui/` | okno główne, panele, widżety, wykresy |
+| `ui/` | okno główne, stół klasyczny (panele, widżety, wykresy), profil układu `layout_profile.py` |
+| `ui/quick/` | nowy interfejs: most parametrów, model układu, motyw i sesja dla QML; pliki `qml/` |
 | `tests/` | testy jednostkowe, wydajności i GUI |
 
 ## Testy i wydajność

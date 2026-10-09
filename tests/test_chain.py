@@ -2,8 +2,8 @@ import time
 
 import numpy as np
 import pytest
-
 from conftest import BLOCK, FS
+
 from dsp.graph import SignalChain, default_channel_map, validate_channel_map
 from dsp.mic import MicChannel
 from dsp.preamp import Preamp

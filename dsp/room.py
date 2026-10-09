@@ -46,7 +46,7 @@ def generate_ir(kind: str, fs: int, size: float = 1.0, seed: int = 1234) -> np.n
         signal.sosfilt(signal.butter(4, 4000, "high", fs=fs, output="sos"), noise, axis=0),
     ]
     tail = np.zeros((n, 2))
-    for b, rt in zip(bands, spec["rt60"]):
+    for b, rt in zip(bands, spec["rt60"], strict=True):
         tail += b * np.exp(-6.91 * t / (rt * size))[:, None]
     build = spec["build"] * size
     tail *= (1.0 - np.exp(-t / max(build, 1e-3)))[:, None]
@@ -67,8 +67,9 @@ def generate_ir(kind: str, fs: int, size: float = 1.0, seed: int = 1234) -> np.n
 
 
 def load_ir_file(path: str, fs: int) -> np.ndarray:
-    import soundfile as sf
     from math import gcd
+
+    import soundfile as sf
 
     data, sr = sf.read(path, always_2d=True, dtype="float64")
     if sr != fs:

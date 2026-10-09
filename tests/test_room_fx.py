@@ -1,7 +1,7 @@
 import numpy as np
+from conftest import BLOCK, FS
 from scipy import signal
 
-from conftest import BLOCK, FS
 from dsp.fx_echo import TapeEcho
 from dsp.fx_siren import DubSiren
 from dsp.fx_spring import SpringReverb
