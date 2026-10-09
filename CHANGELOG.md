@@ -1,0 +1,24 @@
+# Historia zmian
+
+Format: [Keep a Changelog](https://keepachangelog.com/pl/1.1.0/), wersje według [SemVer](https://semver.org/lang/pl/).
+MINOR odpowiada etapowi planu (`Plan.md`), PATCH – poprawkom w jego obrębie. Wersja jest w `version.py`.
+
+## [0.2.0] – 2026-10-09
+
+Etap 2 (w toku): nowy interfejs QML z konfigurowalnym układem.
+
+### Dodane
+- Profil kontrolera Akai MIDImix (warstwa SHIFT, przejęcie wartości, akcje, diody) i gotowe układy wyjść dla Focusrite Scarlett 4i4.
+- Interfejs QML: ekrany LIVE i KONFIGURACJA z kart opisanych profilem JSON, pasek padów, tryb „Edycja układu” (inspektor, przeciąganie, zmiana szerokości i wysokości kart, cofanie, profile, import/eksport).
+- Urządzenia i mapowanie kanałów bezpośrednio w QML, wczytywanie własnej IR, wykresy (odpowiedź toru, zwrotnica, analizator widma).
+- Start z czystym torem (moduły DSP wyłączone; przełącznik DSP n/8), przełącznik modeli kolumn `sim.enabled`.
+- Presety syreny: 8 wbudowanych brzmień i własne presety; 10 nowych presetów EQ (Dub, Steppers, Lovers rock, Plener, sale, Winyl, Ochrona góry, lo-fi, Radio).
+- Wersja w tytule okna, okno *Pomoc → O programie*, zasób wersji w EXE, autotest paczki `--selftest`.
+
+### Zmienione
+- Nowa ikona (głośnik na ciemnym kafelku z paskiem roots) we wszystkich rozmiarach 16–256 px; pasek zadań Windows pokazuje ją także przy starcie z kodu.
+- Paczka EXE odchudzona z 727 do ok. 400 MB; build sam uruchamia autotest.
+
+## [0.1.0] – 2026-10-08
+
+Etap 1: kompletny tor na Qt Widgets – preamp, echo taśmowe, sprężyna, syrena, mikrofon MC z talkoverem, izolator 5-drożny, zwrotnica, tryby Symulacja i Multi, sceny i presety EQ, MIDI learn, build EXE.

@@ -12,7 +12,7 @@ Pełny plan, decyzje i stan prac: `Plan.md` (sekcja „Etap 2: rozwój”). READ
 - Testy: `.\.venv\Scripts\python -m pytest -q` (zadanie VS Code „Testy: wszystkie”).
 - Test wydajności: `.\.venv\Scripts\python -m pytest -q -s tests/test_chain.py -k performance` (mediana < 50% czasu bloku).
 - Lint: `.\.venv\Scripts\python -m ruff check .` – ma przechodzić bez uwag.
-- Uruchomienie: `.\.venv\Scripts\python main.py`. Build EXE: `.\build_exe.ps1` (plik ma BOM – wymagany przez Windows PowerShell 5.1).
+- Uruchomienie: `.\.venv\Scripts\python main.py`. Build EXE: `.\build_exe.ps1` (plik ma BOM – wymagany przez Windows PowerShell 5.1; po buildzie sam uruchamia `--selftest`). Spec odfiltrowuje nieużywane części Qt (czarna lista `QT_UNUSED` i wzorce QML) – nowy moduł Qt/QML w kodzie może wymagać zmiany tej listy.
 - Autotest paczki (QML, ekrany, tryb edycji; wynik JSON): `main.py --selftest wynik.json` lub `RootsSoundsystem.exe --selftest wynik.json`.
 
 ## Architektura w skrócie
@@ -21,7 +21,9 @@ Pełny plan, decyzje i stan prac: `Plan.md` (sekcja „Etap 2: rozwój”). READ
 - `engine/audio_engine.py` – strumienie WASAPI, bufory kołowe, callback wyjściowy. Kod w callbackach nie może rzucać wyjątków ani alokować dużo pamięci.
 - `engine/midi.py` + `engine/midi_profiles.py` – mapowanie MIDI: learn, profile (Akai MIDImix), warstwa SHIFT, przejęcie wartości (pickup), akcje `action:*`, diody przez port wyjściowy. Format zapisu JSON v2 (zgodny ze starym płaskim).
 - `engine/devices.py` – gotowe układy wyjść dla kart 4-kanałowych (Focusrite Scarlett 4i4 3rd gen: słuchawki = wyjścia 3–4, Loopback = wejścia 5–6).
-- `presets/` – sceny i presety EQ (JSON w `%APPDATA%\RootsSoundsystem\`).
+- `presets/` – sceny, presety EQ i syreny (JSON w `%APPDATA%\RootsSoundsystem\`); `store.PRESET_KINDS` opisuje rodzaje presetów wspólnie dla okna, QML (`PresetsView`, żądania `<kind>_apply/_save/_delete/_reset`) i Widgets (`PresetBar`).
+- `version.py` – jedyne źródło wersji (SemVer; MINOR = etap planu). Przy zmianie wersji zaktualizuj też `pyproject.toml` (test pilnuje) i `CHANGELOG.md`.
+- Ikona: rysunek w `ui.theme.paint_icon`, plik `assets/icon.ico` generuje `assets/generate_icon.py` (build robi to sam).
 - Czysty tor: `dsp.graph.DSP_SWITCHES` (wszystkie `*.enabled`, w tym `sim.enabled` = modele kolumn) i `bypass_values()`; `presets.store.restore_state` przy starcie wyłącza moduły (ustawienie `startup/dsp` = `clean` domyślnie | `last`).
 - `ui/audio_config.py` – wybór urządzeń i zapis ustawień audio bez widżetów (wspólne dla okna Audio i `ui/quick/audio.py`).
 - `ui/layout_profile.py` – profil układu (JSON, bez Qt): karty, kontrolki, pady, skróty, motyw; walidacja i pliki w `%APPDATA%\RootsSoundsystem\layouts\`.

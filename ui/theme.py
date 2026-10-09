@@ -6,7 +6,17 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPalette, QPen, QPixmap
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPalette,
+    QPen,
+    QPixmap,
+    QRadialGradient,
+)
 
 RED = QColor("#d62828")
 GOLD = QColor("#f7b801")
@@ -83,22 +93,69 @@ def bundled_icon_path() -> Path | None:
     return None
 
 
+ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
+ICON_BG = QColor("#1A1916")
+ICON_EDGE = QColor("#3A362E")
+ICON_GOLD = QColor("#E3A52B")
+ICON_STRIPE = (QColor("#B8362A"), QColor("#E3A52B"), QColor("#3F8F4A"))
+
+
+def paint_icon(p: QPainter, s: int) -> None:
+    """Znak aplikacji: głośnik (złote zawieszenie, ciemny stożek, złota nakładka) na ciemnym kafelku.
+
+    Od 32 px dochodzi pasek czerwień–złoto–zieleń; mniejsze rozmiary mają grubsze, prostsze kreski,
+    żeby znak nie zlewał się w plamę na pasku zadań.
+    """
+    p.setRenderHint(QPainter.Antialiasing)
+    small = s < 32
+    m = s * 0.03
+    tile = QRectF(m, m, s - 2 * m, s - 2 * m)
+    radius = s * 0.22
+    p.setPen(QPen(ICON_EDGE, max(1.0, s * 0.02)) if not small else Qt.NoPen)
+    p.setBrush(QBrush(ICON_BG))
+    p.drawRoundedRect(tile, radius, radius)
+    if not small:
+        # pasek roots przycięty do dolnej krawędzi kafelka
+        p.save()
+        clip = QPainterPath()
+        clip.addRoundedRect(tile, radius, radius)
+        p.setClipPath(clip)
+        h = s * 0.1
+        w = tile.width() / 3
+        for i, col in enumerate(ICON_STRIPE):
+            p.fillRect(QRectF(tile.left() + i * w, tile.bottom() - h, w + 0.5, h), col)
+        p.restore()
+    cx = s / 2
+    cy = s * (0.5 if small else 0.45)
+    r = s * (0.36 if small else 0.31)
+    ring = max(1.6, s * (0.11 if small else 0.065))
+    cone = QRadialGradient(cx, cy, r)
+    cone.setColorAt(0.0, QColor("#3A362E"))
+    cone.setColorAt(1.0, QColor("#0B0A08"))
+    p.setPen(QPen(ICON_GOLD, ring))
+    p.setBrush(QBrush(cone))
+    p.drawEllipse(QRectF(cx - r, cy - r, 2 * r, 2 * r))
+    if s >= 48:  # przetłoczenie stożka
+        rc = r * 0.62
+        p.setPen(QPen(ICON_EDGE, s * 0.015))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(QRectF(cx - rc, cy - rc, 2 * rc, 2 * rc))
+    cap = r * (0.38 if small else 0.32)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QBrush(ICON_GOLD))
+    p.drawEllipse(QRectF(cx - cap, cy - cap, 2 * cap, 2 * cap))
+
+
 def app_icon() -> QIcon:
     ico = bundled_icon_path()
     if ico is not None:
         return QIcon(str(ico))
-    pm = QPixmap(64, 64)
-    pm.fill(Qt.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    rect = QRectF(4, 4, 56, 56)
-    for i, col in enumerate((RED, GOLD, GREEN)):
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(col))
-        p.drawPie(rect, (90 + i * 120) * 16, 120 * 16)
-    p.setBrush(QBrush(QColor("#111")))
-    p.drawEllipse(QRectF(20, 20, 24, 24))
-    p.setPen(QPen(GOLD, 3))
-    p.drawEllipse(QRectF(27, 27, 10, 10))
-    p.end()
-    return QIcon(pm)
+    icon = QIcon()
+    for s in ICON_SIZES:
+        pm = QPixmap(s, s)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        paint_icon(p, s)
+        p.end()
+        icon.addPixmap(pm)
+    return icon

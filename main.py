@@ -34,6 +34,19 @@ from engine.params import ParamStore  # noqa: E402
 from presets.store import restore_state  # noqa: E402
 from ui.main_window import MainWindow  # noqa: E402
 from ui.theme import app_icon, apply_theme  # noqa: E402
+from version import APP_USER_MODEL_ID, VERSION  # noqa: E402
+
+
+def set_app_user_model_id() -> None:
+    """Własny AppUserModelID: pasek zadań Windows pokazuje ikonę aplikacji, a nie Pythona (start z kodu)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+    except (AttributeError, OSError):
+        pass
 
 
 def selftest(path: str) -> int:
@@ -78,6 +91,7 @@ def selftest(path: str) -> int:
         steps.append("edit")
     qml_problems = [m for m in messages if ".qml" in m or "TypeError" in m or "ReferenceError" in m]
     result = {
+        "version": VERSION,
         "frozen": FROZEN,
         "qml_loaded": win.quick is not None,
         "qml_errors": win.quick.error_text() if win.quick is not None else "brak interfejsu QML",
@@ -105,9 +119,11 @@ def main() -> int:
         i = sys.argv.index("--selftest")
         out = sys.argv[i + 1] if i + 1 < len(sys.argv) else str(ROOT / "selftest.json")
         return selftest(out)
+    set_app_user_model_id()
     app = QApplication(sys.argv)
     app.setOrganizationName("RootsSoundsystem")
     app.setApplicationName("RootsSoundsystem")
+    app.setApplicationVersion(VERSION)
     app.setWindowIcon(app_icon())
     app.setQuitOnLastWindowClosed(False)
     apply_theme(app)

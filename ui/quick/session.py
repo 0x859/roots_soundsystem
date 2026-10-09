@@ -61,6 +61,7 @@ class QmlSession(QObject):
     devicesChanged = Signal()
     pickupChanged = Signal()
     eqPresetsChanged = Signal()
+    sirenPresetsChanged = Signal()
     dspChanged = Signal()
     toast = Signal(str)
 
@@ -80,7 +81,7 @@ class QmlSession(QObject):
         self._editing = False
         self._devices: dict[str, Any] = {}
         self._pickup: dict[str, float] = {}
-        self._eq_presets: list[dict] = []
+        self._presets: dict[str, list[dict]] = {"eq": [], "siren": []}
         self._dsp = (0, 0)
         self.midi_lookup = lambda _key: ""
         self.memory_lookup = lambda _i: False
@@ -163,7 +164,12 @@ class QmlSession(QObject):
     @Property("QVariantList", notify=eqPresetsChanged)
     def eqPresets(self) -> list[dict]:
         """Presety EQ: [{label, value, builtin}] (własne oznaczone gwiazdką)."""
-        return self._eq_presets
+        return self._presets["eq"]
+
+    @Property("QVariantList", notify=sirenPresetsChanged)
+    def sirenPresets(self) -> list[dict]:
+        """Presety syreny: [{label, value, builtin}] (własne oznaczone gwiazdką)."""
+        return self._presets["siren"]
 
     @Property(int, notify=dspChanged)
     def dspOn(self) -> int:
@@ -174,11 +180,12 @@ class QmlSession(QObject):
         return self._dsp[1]
 
     # --- aktualizacje z okna głównego ---
-    def set_eq_presets(self, presets: list[tuple[str, bool]]) -> None:
+    def set_presets(self, kind: str, presets: list[tuple[str, bool]]) -> None:
+        """Lista presetów rodzaju „eq” lub „siren” (patrz `presets.store.PRESET_KINDS`)."""
         items = [{"label": n if b else f"{n} *", "value": n, "builtin": b} for n, b in presets]
-        if items != self._eq_presets:
-            self._eq_presets = items
-            self.eqPresetsChanged.emit()
+        if items != self._presets[kind]:
+            self._presets[kind] = items
+            (self.sirenPresetsChanged if kind == "siren" else self.eqPresetsChanged).emit()
 
     def set_dsp(self, on: int, total: int) -> None:
         if (on, total) != self._dsp:

@@ -1,6 +1,6 @@
 [project]
 name = "roots-soundsystem"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cyfrowy tor soundsystemu roots and culture (Windows 11, PySide6)"
 requires-python = ">=3.11"
 
@@ -19,7 +19,7 @@ select = ["F", "E", "W", "I", "B", "UP", "NPY"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["dsp", "engine", "presets", "ui"]
+known-first-party = ["dsp", "engine", "presets", "ui", "version"]
 
 [tool.ruff.format]
 quote-style = "double"

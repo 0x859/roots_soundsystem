@@ -1,4 +1,4 @@
-"""Generuje assets/icon.ico (16/32/48/256) z tym samym znakiem co UI."""
+"""Generuje assets/icon.ico (16–256 px, także 20/24/40 dla skalowania 125–150%) ze znakiem z `ui.theme`."""
 
 from __future__ import annotations
 
@@ -8,31 +8,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
+from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
-from ui.theme import GOLD, GREEN, RED
+from ui.theme import ICON_SIZES, paint_icon
 
 
 def paint_mark(image: QImage) -> None:
-    s = image.width()
     image.fill(Qt.transparent)
     p = QPainter(image)
-    p.setRenderHint(QPainter.Antialiasing)
-    m = s * 0.06
-    rect = QRectF(m, m, s - 2 * m, s - 2 * m)
-    for i, col in enumerate((RED, GOLD, GREEN)):
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(col))
-        p.drawPie(rect, (90 + i * 120) * 16, 120 * 16)
-    inner = s * 0.31
-    p.setBrush(QBrush(QColor("#111")))
-    p.drawEllipse(QRectF((s - inner) / 2, (s - inner) / 2, inner, inner))
-    ring = s * 0.16
-    p.setPen(QPen(GOLD, max(1.5, s * 0.045)))
-    p.setBrush(Qt.NoBrush)
-    p.drawEllipse(QRectF((s - ring) / 2, (s - ring) / 2, ring, ring))
+    paint_icon(p, image.width())
     p.end()
 
 
@@ -63,7 +49,7 @@ def main() -> None:
     app = QApplication.instance() or QApplication([])
     dest = Path(__file__).resolve().parent / "icon.ico"
     images = []
-    for size in (16, 32, 48, 256):
+    for size in ICON_SIZES:
         im = QImage(size, size, QImage.Format_ARGB32)
         paint_mark(im)
         images.append(im)

@@ -50,6 +50,7 @@ VIEWS = {
     "view:devices": "Urządzenia, kanały i tryb wyjścia",
     "view:room_ir": "Własna IR miejsca (plik)",
     "view:eq_presets": "Presety EQ",
+    "view:siren_presets": "Presety syreny (brzmienia)",
 }
 MAX_SPAN = 4
 MAX_ROWS = 3
@@ -156,12 +157,13 @@ def default_profile() -> dict[str, Any]:
             _c("siren.sweep", "knob", "S"),
             _c("siren.level", "knob", "S"),
             _c("view:siren_memories", "meter", "M"),
+            _c("view:siren_presets", "meter", "M"),
             _c("siren.wave", "value", "M"),
             _c("siren.lfo_shape", "value", "M"),
             _c("siren.sweep_time", "knob", "S"),
             _c("siren.release", "knob", "S"),
             _c("siren.echo_send", "knob", "S"),
-        ], color="fx", more=6, info="siren.wave"),
+        ], color="fx", more=7, info="siren.wave"),
         _card("iso", "IZOLATOR", iso, toggle="iso.enabled", info="iso.slope"),
         _card("mic", "MIKROFON", [
             _c("mic.level", "knob", "L"),

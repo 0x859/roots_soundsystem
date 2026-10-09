@@ -19,3 +19,6 @@ def test_selftest_from_source(tmp_path):
     assert result["ok"] and result["qml_loaded"] and result["qml_warnings"] == []
     assert result["steps"] == ["config", "live", "edit"]
     assert result["dsp_on"] == 0  # start z czystym torem
+    from version import VERSION
+
+    assert result["version"] == VERSION

@@ -590,6 +590,32 @@ def test_window_dsp_eq_ir(qml_window, monkeypatch, tmp_path):
     assert win.ir_path == str(ir) and win.session.property("devices")["ir"] == "sala.wav"
 
 
+def test_window_siren_presets(qml_window):
+    from dsp.fx_siren import SIREN_MEMORY_KEYS
+    from presets.builtin import SIREN_PRESETS
+    from ui import layout_profile as lp
+
+    win, store = qml_window, qml_window.store
+    siren = next(c for c in lp.default_profile()["cards"] if c["id"] == "siren")
+    assert "view:siren_presets" in [c["param"] for c in siren["controls"][: siren["more"]]]
+
+    names = [p["value"] for p in win.session.property("sirenPresets")]
+    assert names[: len(SIREN_PRESETS)] == list(SIREN_PRESETS)
+    win._on_qml_request("siren_apply", "Laser")
+    assert store["siren.wave"] == 3 and store["siren.pitch"] == 1500.0
+    win._on_qml_request("siren_save", "Mój laser")
+    assert any(p["value"] == "Mój laser" and not p["builtin"] for p in win.session.property("sirenPresets"))
+    win._on_qml_request("siren_reset", None)
+    assert all(store[k] == store.specs[k].default for k in SIREN_MEMORY_KEYS)
+    win._on_qml_request("siren_apply", "Mój laser")
+    assert store["siren.pitch"] == 1500.0
+    win._on_qml_request("siren_delete", "Laser")  # wbudowany – zostaje
+    win._on_qml_request("siren_delete", "Mój laser")
+    names = [p["value"] for p in win.session.property("sirenPresets")]
+    assert "Laser" in names and "Mój laser" not in names
+    assert not store["siren.trigger"]  # preset nie wyzwala syreny
+
+
 def test_window_qml_requests(qml_window):
     win, store = qml_window, qml_window.store
     win._on_qml_request("scene", "Steppers heavy")

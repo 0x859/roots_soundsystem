@@ -37,7 +37,7 @@ Pakiet onedir (folder z EXE, ikoną i DLL-ami Qt / PortAudio / libsndfile):
 .\build_exe.ps1
 ```
 
-Wynik: `dist\RootsSoundsystem\RootsSoundsystem.exe` (ikona w zasobach EXE oraz kopia `icon.ico` obok). Skopiuj cały folder `RootsSoundsystem` — sam plik EXE nie wystarczy.
+Wynik: `dist\RootsSoundsystem\RootsSoundsystem.exe` (ikona w zasobach EXE oraz kopia `icon.ico` obok). Skopiuj cały folder `RootsSoundsystem` — sam plik EXE nie wystarczy. Paczka ma ok. 400 MB: spec pomija nieużywane części Qt (WebEngine, 3D, Multimedia, wykresy Qt, style Controls inne niż Basic, tłumaczenia) oraz testy, dokumentację i przykłady bibliotek. Największe pozostałe części to LLVM dla numba (~118 MB), scipy i Qt. Skrypt po zbudowaniu sam uruchamia autotest paczki i przerywa się, jeśli autotest nie przejdzie.
 
 Sprawdzenie paczki bez klikania (EXE nie ma konsoli, wynik trafia do pliku JSON; tymczasowe ustawienia, bez dźwięku):
 
@@ -102,7 +102,10 @@ Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = t
 - **Skróty** (domyślne, zmienialne w trybie ✎ UKŁAD): `1`-`5` kill pasm izolatora, `Spacja` throw echa, `S` syrena, `D` crash sprężyny, `T` tap tempo, `M` mute, `F5`-`F8` pamięci syreny (Ctrl+klik na M1-M4 zapisuje). W trybie edycji układu skróty są wyłączone.
 - **Pasek LIVE** (stół klasyczny): START/STOP, sceny, kill 1-5, THROW, SYRENA, CRASH, sweep HP/LP, master, mute i mierniki – zawsze na górze okna.
 - **Stół klasyczny**: dwa rzędy bez poziomego paska narzędzi; wykresy są w pierwszym rzędzie po prawej. Przy mniejszym oknie stół skaluje się (dolna granica 0.7).
-- **Sceny** (pasek LIVE): pełny stan toru; wbudowane: Neutralny, Roots warm, Steppers heavy, Dub echo chamber, Plener, Słuchawki (bass feel). Własne sceny i presety EQ są zapisywane jako JSON w `%APPDATA%\RootsSoundsystem\`.
+- **Sceny** (pasek LIVE): pełny stan toru; wbudowane: Neutralny, Roots warm, Steppers heavy, Dub echo chamber, Plener, Słuchawki (bass feel). Własne sceny i presety są zapisywane jako JSON w `%APPDATA%\RootsSoundsystem\` (`scenes\`, `eq\`, `siren\`).
+- **Presety EQ** (karta EQ 12 pasm / panel EQ): m.in. Flat, Dub (sub i dół), Steppers, Lovers rock, Plener, Mała i Duża sala, Winyl, Ochrona góry, Stare nagranie, Radio/telefon. Wybór od razu ustawia pasma; własne oznaczone gwiazdką.
+- **Presety syreny** (karta SYRENA / panel SYRENA): gotowe brzmienia – Klasyczna (dub siren), Wznosząca (riser), Spadająca bomba, Laser, Alarm (dwa tony), Whoop, Ptak (ćwierk), Sub drop. Preset ustawia brzmienie (fala, wysokość, LFO, sweep, release, poziom, send echo), ale nie wyzwala syreny. W QML: lista, `+` zapisuje bieżące brzmienie pod nową nazwą, `×` usuwa własne, `↺` przywraca domyślne. Pamięci M1–M4 działają jak dotąd (szybkie przełączanie skrótem/MIDI).
+- **Wersja**: w tytule okna i w *Pomoc → O programie* (razem z wersjami Pythona i Qt – przydatne przy zgłaszaniu problemów); EXE ma ją we *Właściwościach → Szczegóły*. Historia zmian: `CHANGELOG.md`.
 - **Urządzenia i tryb**: przycisk *Audio…* albo kliknięcie podsumowania w pasku stanu.
 - **Własna IR miejsca**: panel *Kolumny i miejsce* → *Wczytaj IR…*; plik jest resamplowany do częstotliwości pracy.
 - **MIDI**: menu MIDI → wybór portu → *Tryb learn*: porusz kontrolką w aplikacji, a potem elementem kontrolera. Przyciski/nuty sterują przyciskami chwilowymi i przełącznikami, CC – pokrętłami.
@@ -114,7 +117,7 @@ Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = t
 | --- | --- |
 | `dsp/` | moduły DSP (biquady, EQ12, preamp, izolator, zwrotnica, efekty, mikrofon, kolumny, splot, limitery) i `graph.py` ze składającym je `SignalChain` |
 | `engine/` | rejestr parametrów, silnik audio WASAPI, sterowanie MIDI |
-| `presets/` | wbudowane sceny i presety EQ, zapis własnych |
+| `presets/` | wbudowane sceny, presety EQ i syreny, zapis własnych (`PRESET_KINDS` – wspólne dla obu interfejsów) |
 | `ui/` | okno główne, stół klasyczny (panele, widżety, wykresy), profil układu `layout_profile.py` |
 | `ui/quick/` | nowy interfejs: most parametrów, model układu, motyw i sesja dla QML; pliki `qml/` |
 | `tests/` | testy jednostkowe, wydajności i GUI |

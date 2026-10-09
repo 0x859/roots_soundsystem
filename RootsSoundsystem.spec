@@ -1,13 +1,45 @@
 # -*- mode: python ; coding: utf-8 -*-
 """Pakiet onedir: EXE + ikona + DLL (PortAudio, libsndfile, Qt)."""
 
+import re
+import sys
 from pathlib import Path
 
 from PyInstaller.building.api import COLLECT, EXE, PYZ
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
+from PyInstaller.utils.win32.versioninfo import (
+    FixedFileInfo,
+    StringFileInfo,
+    StringStruct,
+    StringTable,
+    VarFileInfo,
+    VarStruct,
+    VSVersionInfo,
+)
 
 ROOT = Path(SPECPATH)
+sys.path.insert(0, str(ROOT))
+from version import APP_NAME, VERSION, version_tuple  # noqa: E402
+
+# zasób wersji EXE (Właściwości → Szczegóły); język polski, Unicode
+VERSION_INFO = VSVersionInfo(
+    ffi=FixedFileInfo(filevers=version_tuple(), prodvers=version_tuple()),
+    kids=[
+        StringFileInfo([
+            StringTable("041504B0", [
+                StringStruct("CompanyName", APP_NAME),
+                StringStruct("FileDescription", f"{APP_NAME} – cyfrowy tor roots and culture"),
+                StringStruct("FileVersion", VERSION),
+                StringStruct("InternalName", "RootsSoundsystem"),
+                StringStruct("OriginalFilename", "RootsSoundsystem.exe"),
+                StringStruct("ProductName", APP_NAME),
+                StringStruct("ProductVersion", VERSION),
+            ])
+        ]),
+        VarFileInfo([VarStruct("Translation", [0x0415, 1200])]),
+    ],
+)
 
 datas = [(str(ROOT / "assets" / "icon.ico"), "assets")]
 # interfejs QML (pliki .qml obok modułu ui.quick) i opcjonalne czcionki OFL
@@ -54,7 +86,7 @@ for pkg in ("sounddevice", "soundfile", "scipy", "numba", "llvmlite", "pygame", 
         continue
     datas += collected_datas
     binaries += collected_binaries
-    hiddenimports += collected_hidden
+    hiddenimports += [m for m in collected_hidden if not re.search(r"\.(tests?|examples|docs)(\.|$)", m)]
 
 for pkg in ("sounddevice", "soundfile"):
     try:
@@ -75,6 +107,43 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
+# --- odchudzenie paczki ---------------------------------------------------------------------------
+# Hooki PySide6 zbierają wszystkie moduły QML razem z ich DLL (sam WebEngine to ~200 MB). Interfejs
+# używa tylko QtQuick + Controls (styl Basic) + Layouts + Shapes, a pyqtgraph – OpenGL, Svg i Test.
+# Lista rodzin jest czarna (nie biała), żeby nowy, potrzebny moduł nie wypadł po cichu; braki
+# zależności wyłapuje autotest `--selftest` uruchamiany przez build_exe.ps1.
+QT_UNUSED = (
+    "3D", "Quick3D", "Charts", "DataVisualization", "Graphs", "Multimedia", "SpatialAudio", "Location",
+    "Positioning", "Sensors", "TextToSpeech", "RemoteObjects", "Scxml", "StateMachine", "VirtualKeyboard",
+    "WebEngine", "WebChannel", "WebSockets", "WebView", "Pdf", "Labs", "ShaderTools", "Sql", "QuickTest",
+    "QuickParticles", "QuickTimeline", "QuickDialogs2", "QuickVectorImage", "QuickShapesDesignHelpers",
+    "QmlLocalStorage", "QmlXmlListModel", "QuickControls2Fusion", "QuickControls2Imagine",
+    "QuickControls2Material", "QuickControls2Universal", "QuickControls2FluentWinUI3", "QuickControls2Windows",
+)
+QT_UNUSED_DLL = re.compile(r"PySide6/(Qt6|Qt)(" + "|".join(QT_UNUSED) + r")[^/]*\.(dll|pyd)$", re.I)
+QML_KEEP = re.compile(r"PySide6/qml/(QtQml|QtQuick)/")
+QML_UNUSED = re.compile(
+    r"PySide6/qml/(QtQml/(StateMachine|XmlListModel)"
+    r"|QtQuick/(VirtualKeyboard|NativeStyle|Dialogs|Pdf|Scene2D|Scene3D|Particles|Timeline|LocalStorage"
+    r"|VectorImage|tooling|Shapes/DesignHelpers|Controls/(Fusion|Imagine|Material|Universal|FluentWinUI3|Windows|designer)))/"
+)
+OTHER_UNUSED = re.compile(
+    r"PySide6/(translations|plugins/(qmltooling|platforminputcontexts)|plugins/imageformats/qpdf)"
+    r"|/(tests?|examples|docs)/"
+)
+
+
+def unused(dest: str) -> bool:
+    d = dest.replace("\\", "/")
+    if d.startswith("PySide6/qml/"):
+        return not QML_KEEP.match(d) or bool(QML_UNUSED.match(d))
+    return bool(QT_UNUSED_DLL.match(d) or OTHER_UNUSED.search("/" + d))
+
+
+a.binaries = [e for e in a.binaries if not unused(e[0])]
+a.datas = [e for e in a.datas if not unused(e[0])]
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
@@ -93,6 +162,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=str(ROOT / "assets" / "icon.ico"),
+    version=VERSION_INFO,
 )
 coll = COLLECT(
     exe,

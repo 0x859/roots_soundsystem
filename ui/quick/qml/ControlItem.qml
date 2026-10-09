@@ -50,6 +50,7 @@ Item {
             case "view:devices": return devicesC
             case "view:room_ir": return irC
             case "view:eq_presets": return eqC
+            case "view:siren_presets": return sirenPresetsC
             }
             switch (root.type) {
             case "fader": return faderC
@@ -141,7 +142,11 @@ Item {
     }
     Component {
         id: eqC
-        EqPresetsView { interactive: !root.editing }
+        PresetsView { kind: "eq"; interactive: !root.editing }
+    }
+    Component {
+        id: sirenPresetsC
+        PresetsView { kind: "siren"; interactive: !root.editing }
     }
 
     // --- tryb edycji ---

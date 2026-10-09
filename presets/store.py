@@ -1,16 +1,19 @@
-"""Zapis i odczyt scen oraz presetów EQ w %APPDATA%\\RootsSoundsystem."""
+"""Zapis i odczyt scen oraz presetów EQ i syreny w %APPDATA%\\RootsSoundsystem."""
 
 from __future__ import annotations
 
 import json
 import os
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
+from dsp.fx_siren import SIREN_MEMORY_KEYS
 from dsp.graph import bypass_values
 from engine.params import ParamStore
 
-from .builtin import EQ_PRESETS, SCENES, eq_values
+from .builtin import EQ_PRESETS, SCENES, SIREN_PRESETS, eq_values
 
 
 def app_dir() -> Path:
@@ -105,3 +108,51 @@ def save_eq_preset(name: str, store: ParamStore) -> Path:
 def delete_eq_preset(name: str) -> None:
     if name not in EQ_PRESETS:
         _delete("eq", name)
+
+
+# --- presety syreny (brzmienie bez wyzwalacza) ---
+def list_siren_presets() -> list[tuple[str, bool]]:
+    return [(n, True) for n in SIREN_PRESETS] + [(n, False) for n in _list("siren") if n not in SIREN_PRESETS]
+
+
+def siren_preset_values(store: ParamStore, name: str) -> dict:
+    """Pełne brzmienie: domyślne `siren.*` uzupełnione presetem (plik bez części kluczy też zadziała)."""
+    values = {k: store.specs[k].default for k in SIREN_MEMORY_KEYS}
+    data = SIREN_PRESETS[name] if name in SIREN_PRESETS else _load("siren", name)
+    values.update({k: v for k, v in data.items() if k in values})
+    return values
+
+
+def save_siren_preset(name: str, store: ParamStore) -> Path:
+    return _save("siren", name, {k: store[k] for k in SIREN_MEMORY_KEYS})
+
+
+def delete_siren_preset(name: str) -> None:
+    if name not in SIREN_PRESETS:
+        _delete("siren", name)
+
+
+# --- wspólny opis rodzajów presetów (okno, QML, panele klasyczne) ---
+@dataclass(frozen=True)
+class PresetKind:
+    title: str  # „preset EQ”, „preset syreny” – do komunikatów
+    list: Callable[[], list[tuple[str, bool]]]  # [(nazwa, wbudowany)]
+    values: Callable[[ParamStore, str], dict]  # wartości do ustawienia w torze
+    save: Callable[[str, ParamStore], Path]
+    delete: Callable[[str], None]  # wbudowanych nie usuwa
+    keys: tuple[str, ...]  # parametry objęte presetem (RESET przywraca ich domyślne)
+
+    def is_builtin(self, name: str) -> bool:
+        return dict(self.list()).get(name, True)
+
+
+PRESET_KINDS: dict[str, PresetKind] = {
+    "eq": PresetKind(
+        "preset EQ", list_eq_presets, lambda _store, name: {"eq.preamp": 0.0} | eq_preset_values(name),
+        save_eq_preset, delete_eq_preset, ("eq.preamp", *(f"eq.b{i}" for i in range(12))),
+    ),
+    "siren": PresetKind(
+        "preset syreny", list_siren_presets, siren_preset_values, save_siren_preset, delete_siren_preset,
+        tuple(SIREN_MEMORY_KEYS),
+    ),
+}

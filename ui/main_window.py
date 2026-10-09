@@ -33,6 +33,7 @@ from engine.midi import MidiController
 from engine.midi_profiles import PROFILES
 from engine.params import ParamStore
 from presets import store as preset_store
+from version import APP_NAME, VERSION
 
 from . import audio_config, layout_profile
 from .binding import ParamBridge
@@ -55,6 +56,9 @@ from .quick import LayoutModel, QmlAudio, QmlParams, QmlPlots, QmlSession
 from .quick.session import midi_label
 from .scaling import DeskScaler
 from .theme import app_icon
+from .widgets import PresetBar
+
+PRESET_OPS = ("apply", "save", "delete", "reset")
 
 MODES = (("sim", "Symulacja (stereo)"), ("multi", "Multi (wielokanałowe)"))
 BLOCKS = (256, 512, 1024)
@@ -86,6 +90,21 @@ Aplikacja przechwytuje dźwięk systemu przez wirtualny kabel audio:<br>
 3. W <b>Ustawieniach audio</b> wybierz <b>CABLE Output</b> jako wejście muzyki i swoje słuchawki/głośniki (lub kartę wielokanałową) jako wyjście.<br><br>
 Szczegóły w README.md.
 """
+
+
+def about_text() -> str:
+    """Treść okna „O programie”: wersja aplikacji i bibliotek, przydatna przy zgłaszaniu problemów."""
+    import platform
+
+    import numpy
+    import PySide6
+    from PySide6.QtCore import qVersion
+
+    return (
+        f"<b>{APP_NAME} {VERSION}</b><br>Cyfrowy tor soundsystemu roots and culture.<br><br>"
+        f"Python {platform.python_version()} · PySide6 {PySide6.__version__} (Qt {qVersion()}) · "
+        f"numpy {numpy.__version__}<br>Windows {platform.version()}"
+    )
 
 
 class ClickableLabel(QLabel):
@@ -140,7 +159,7 @@ class MainWindow(QMainWindow):
         self._shortcuts: dict[int, str] = self.layout_model.shortcut_map()
         self.layout_model.shortcutsChanged.connect(lambda: setattr(self, "_shortcuts", self.layout_model.shortcut_map()))
 
-        self.setWindowTitle("Roots Soundsystem – cyfrowy tor roots and culture")
+        self.setWindowTitle(f"{APP_NAME} {VERSION} – cyfrowy tor roots and culture")
         self.setWindowIcon(app_icon())
         self._build_central()
         self._build_menus()
@@ -171,7 +190,7 @@ class MainWindow(QMainWindow):
         self._sync_scene()
         self._update_session_status()
         self._update_dsp_state()
-        self._sync_eq_presets()
+        self._sync_presets()
         self._update_responses()
         QApplication.instance().installEventFilter(self)
         if startup_checks:
@@ -323,6 +342,8 @@ class MainWindow(QMainWindow):
         m_help = mb.addMenu("Pomo&c")
         m_help.addAction("Skróty klawiszowe", lambda: QMessageBox.information(self, "Skróty", SHORTCUTS_HELP))
         m_help.addAction("Instalacja VB-Cable", self._show_vbcable_help)
+        m_help.addSeparator()
+        m_help.addAction("O programie", self._show_about)
 
     def _populate_midi_menu(self) -> None:
         m = self.m_midi
@@ -675,22 +696,9 @@ class MainWindow(QMainWindow):
             if path:
                 self._load_ir(path)
                 self._update_session_status()
-        elif action == "eq_apply":
-            self.store.set_many({"eq.preamp": 0.0} | preset_store.eq_preset_values(str(arg)), source="gui")
-        elif action == "eq_save":
-            name = str(arg).strip()
-            if name:
-                preset_store.save_eq_preset(name, self.store)
-                self._sync_eq_presets()
-                self.session.toast.emit(f"Zapisano preset EQ „{name}”")
-        elif action == "eq_delete":
-            if dict(preset_store.list_eq_presets()).get(str(arg), True):
-                self.session.toast.emit("Wbudowanych presetów nie można usunąć")
-            else:
-                preset_store.delete_eq_preset(str(arg))
-                self._sync_eq_presets()
-        elif action == "eq_reset":
-            self.store.reset(["eq.preamp"] + [f"eq.b{i}" for i in range(12)], source="gui")
+        elif action.partition("_")[0] in preset_store.PRESET_KINDS and action.partition("_")[2] in PRESET_OPS:
+            kind, _, op = action.partition("_")
+            self._preset_request(kind, op, arg)
         elif action == "startup_dsp":
             self.clean_start_act.setChecked(str(arg) != "last")
         elif action == "classic":
@@ -742,11 +750,30 @@ class MainWindow(QMainWindow):
         self.settings.setValue("startup/dsp", mode)
         self._update_session_status()
 
-    def _sync_eq_presets(self) -> None:
-        self.session.set_eq_presets(preset_store.list_eq_presets())
-        panel = self.findChild(EQ12Panel)
-        if panel is not None:
-            panel._reload()
+    def _preset_request(self, kind: str, op: str, arg) -> None:
+        """Presety EQ i syreny z QML: apply / save / delete / reset (wspólne `PRESET_KINDS`)."""
+        pk = preset_store.PRESET_KINDS[kind]
+        name = str(arg or "").strip()
+        if op == "apply" and name:
+            self.store.set_many(pk.values(self.store, name), source="gui")
+        elif op == "save" and name:
+            pk.save(name, self.store)
+            self._sync_presets()
+            self.session.toast.emit(f"Zapisano {pk.title} „{name}”")
+        elif op == "delete" and name:
+            if pk.is_builtin(name):
+                self.session.toast.emit("Wbudowanych presetów nie można usunąć")
+            else:
+                pk.delete(name)
+                self._sync_presets()
+        elif op == "reset":
+            self.store.reset(list(pk.keys), source="gui")
+
+    def _sync_presets(self) -> None:
+        for kind, pk in preset_store.PRESET_KINDS.items():
+            self.session.set_presets(kind, pk.list())
+        for bar in self.findChildren(PresetBar):
+            bar.reload(bar.combo.currentData())
 
     def _learn_param(self, key: str) -> None:
         if not self.midi.available or key not in self.store.specs:
@@ -869,6 +896,9 @@ class MainWindow(QMainWindow):
             self._show_vbcable_help()
         if first_run or saved_out_missing:
             self.open_audio_settings()
+
+    def _show_about(self) -> None:
+        QMessageBox.about(self, f"O programie {APP_NAME}", about_text())
 
     def _show_vbcable_help(self) -> None:
         box = QMessageBox(self)

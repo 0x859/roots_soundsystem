@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QApplication, QGridLayout, QGroupBox, QHBoxLayout,
 
 from ..dub_actions import N_MEMORIES, TapTempo, recall_siren_memory, store_siren_memory
 from ..theme import GREEN, RED
-from ..widgets import MomentaryButton, make_control
+from ..widgets import MomentaryButton, PresetBar, make_control
 
 __all__ = ["N_MEMORIES", "DubPanel"]
 
@@ -101,10 +101,11 @@ class DubPanel(QWidget):
             b.setToolTip(f"Klik: przywołaj pamięć {i + 1} (F{5 + i}); Ctrl+klik: zapisz bieżące ustawienia syreny")
             b.clicked.connect(lambda _=False, i=i: self._memory_clicked(i))
             ml.addWidget(b)
-        g.addWidget(mem, 3, 0, 1, 4)
+        g.addWidget(PresetBar(self.bridge, "siren", combo_width=170), 3, 0, 1, 4)
+        g.addWidget(mem, 4, 0, 1, 4)
         trig = MomentaryButton(self.bridge, "siren.trigger", "SYRENA")
         trig.setMinimumHeight(22)
-        g.addWidget(trig, 4, 0, 1, 4)
+        g.addWidget(trig, 5, 0, 1, 4)
         return box
 
     def _memory_clicked(self, i: int) -> None:
