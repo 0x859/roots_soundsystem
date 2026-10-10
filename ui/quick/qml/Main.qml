@@ -15,6 +15,9 @@ Rectangle {
     property int selCtl: -1
     property int selPad: -1
     property var expanded: ({})
+    // widok „Wszystkie parametry”: wybrany moduł i wyszukiwanie (przetrwają przebudowę kart)
+    property string allGroup: ""
+    property string allFilter: ""
     // przeciąganie: dragInfo = {kind, ci, k, label}; cel = karta dropCi (przed/po) lub kontrolka dropK
     property var dragInfo: null
     property int dropCi: -1

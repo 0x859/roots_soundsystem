@@ -52,6 +52,7 @@ Item {
             case "view:eq_presets": return eqC
             case "view:siren_presets": return sirenPresetsC
             case "view:midi_map": return midiMapC
+            case "view:all_params": return allParamsC
             }
             switch (root.type) {
             case "fader": return faderC
@@ -152,6 +153,10 @@ Item {
     Component {
         id: midiMapC
         MidiMapView { interactive: !root.editing }
+    }
+    Component {
+        id: allParamsC
+        AllParamsView { host: root.host; interactive: !root.editing }
     }
 
     // --- tryb edycji ---

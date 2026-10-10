@@ -186,7 +186,21 @@ def test_new_default_controls_are_registered(store):
     default = lp.normalize(lp.default_profile(), store.specs)
     assert max(lp.ADDED) == lp.VERSION
     assert {t for v in lp.ADDED for t in lp.ADDED[v]} <= _targets(default)
-    assert len(_targets(default)) == 142
+    assert len(_targets(default)) == 143
+
+
+def test_param_groups_cover_every_param(store):
+    groups = lp.param_groups(store.specs)
+    keys = [k for _g, _t, ks in groups for k in ks]
+    assert sorted(keys) == sorted(store.specs) and len(keys) == len(set(keys))
+    titles = {g: t for g, t, _ks in groups}
+    assert titles["preamp"] == "PREAMP" and titles["echo"] == "ECHO" and titles["xo"] == "ZWROTNICA"
+    assert all(t for t in titles.values())
+    assert groups[0][0] == "preamp"  # kolejność jak w torze (`all_specs`)
+    # widok wszystkich parametrów jest w konfiguracji układu domyślnego
+    default = lp.normalize(lp.default_profile(), store.specs)
+    card = next(c for c in default["cards"] if any(x["param"] == "view:all_params" for x in c["controls"]))
+    assert card["visible"] == "config"
 
 
 def test_card_height(store):

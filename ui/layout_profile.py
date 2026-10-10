@@ -15,7 +15,7 @@ from typing import Any
 
 from engine.params import ParamSpec
 
-VERSION = 2
+VERSION = 3
 DEFAULT_NAME = "Domyślny"
 # Cele dodane do układu domyślnego w kolejnych wersjach profilu. Profil zapisany w starszej wersji
 # dostaje je przy wczytaniu w tym samym miejscu co w `default_profile` (kontrolki, pady, skróty),
@@ -23,6 +23,7 @@ DEFAULT_NAME = "Domyślny"
 # = wpis tutaj + podbicie VERSION (test pilnuje).
 ADDED: dict[int, tuple[str, ...]] = {
     2: ("echo.swell", "mic.throw", "out.fx_panic", "iso.position", "preamp.cut", "sim.enabled"),
+    3: ("view:all_params",),
 }
 
 CONTROL_TYPES = ("knob", "fader", "button", "pad", "meter", "value")
@@ -59,7 +60,23 @@ VIEWS = {
     "view:eq_presets": "Presety EQ",
     "view:siren_presets": "Presety syreny (brzmienia)",
     "view:midi_map": "MIDI – mapa kontrolera",
+    "view:all_params": "Wszystkie parametry (moduły, wyszukiwanie)",
 }
+# Moduły toru w widoku wszystkich parametrów (prefiks klucza → tytuł); grupy efektów mają kolor „fx”.
+PARAM_GROUPS = {
+    "preamp": "PREAMP",
+    "mic": "MIKROFON",
+    "echo": "ECHO",
+    "spring": "SPRĘŻYNA",
+    "siren": "SYRENA",
+    "eq": "EQ 12 PASM",
+    "iso": "IZOLATOR",
+    "xo": "ZWROTNICA",
+    "sim": "KOLUMNY",
+    "room": "MIEJSCE",
+    "out": "WYJŚCIE",
+}
+FX_GROUPS = ("echo", "spring", "siren")
 MAX_SPAN = 4
 MAX_ROWS = 3
 MAX_COLS = 12
@@ -246,6 +263,7 @@ def default_profile() -> dict[str, Any]:
             _c("iso.f3", "knob", "S", label="L/H-mid"),
             _c("iso.f4", "knob", "S", label="H-mid/top"),
         ], visible="config"),
+        _card("all_params", "WSZYSTKIE PARAMETRY", [_c("view:all_params", "meter", "M")], span=4, visible="config"),
     ]
     pads = [
         {"param": "iso.kill.sub", "label": "KILL SUB"},
@@ -293,6 +311,14 @@ def default_profile() -> dict[str, Any]:
 def is_hold(spec: ParamSpec) -> bool:
     """Przełącznik aktywny tylko przy przytrzymaniu klawisza lub padu (kill, throw, syrena, crash)."""
     return spec.kind == "bool" and (spec.momentary or spec.key.startswith(HOLD_PREFIXES))
+
+
+def param_groups(specs: dict[str, ParamSpec]) -> list[tuple[str, str, list[str]]]:
+    """Wszystkie parametry pogrupowane wg modułu: (prefiks, tytuł, klucze) w kolejności toru."""
+    groups: dict[str, list[str]] = {}
+    for key in specs:
+        groups.setdefault(key.split(".", 1)[0], []).append(key)
+    return [(g, PARAM_GROUPS.get(g, g.upper()), keys) for g, keys in groups.items()]
 
 
 def is_target(target: str, specs: dict[str, ParamSpec]) -> bool:

@@ -10,7 +10,7 @@ from PySide6.QtQml import QQmlEngine
 from engine.params import ParamSpec
 
 from ..binding import ParamBridge
-from ..layout_profile import ACTIONS, VIEWS, allowed_types, is_hold, target_label
+from ..layout_profile import ACTIONS, FX_GROUPS, VIEWS, allowed_types, is_hold, param_groups, target_label
 
 
 class QmlParam(QObject):
@@ -167,6 +167,23 @@ class QmlParams(QObject):
         if target not in specs and target not in ACTIONS and target not in VIEWS:
             return []
         return list(allowed_types(target, specs))
+
+    @Slot(result="QVariantList")
+    def groups(self) -> list[dict[str, Any]]:
+        """Moduły toru do widoku wszystkich parametrów: klucz, tytuł, liczba parametrów, kolor."""
+        return [
+            {"key": g, "title": title, "count": len(keys), "color": "fx" if g in FX_GROUPS else "accent"}
+            for g, title, keys in param_groups(self.bridge.store.specs)
+        ]
+
+    @Slot(str, str, result="QVariantList")
+    def paramKeys(self, group: str, text: str) -> list[str]:
+        """Klucze parametrów modułu `group` albo – przy niepustym `text` – pasujące we wszystkich modułach."""
+        specs = self.bridge.store.specs
+        q = text.strip().lower()
+        if q:
+            return [k for k, s in specs.items() if q in k.lower() or q in s.label.lower()]
+        return next((keys for g, _t, keys in param_groups(specs) if g == group), [])
 
     @Slot(str, result="QVariantList")
     def search(self, text: str) -> list[dict[str, str]]:

@@ -18,6 +18,8 @@ MINOR odpowiada etapowi planu (`docs/PLAN.md`), PATCH – poprawkom w jego obrę
 - MIDImix: Rec Arm 6 to teraz DRY CUT (MONO przeniesione na SOLO + Rec Arm 6).
 - Sprzężenie echa zmienia się płynnie (rampa 150 ms) – także przy kręceniu gałką.
 
+- KONFIGURACJA: karta **WSZYSTKIE PARAMETRY** (widok `view:all_params`) – każdy parametr toru według modułu (PREAMP, ECHO, … WYJŚCIE) albo przez wyszukiwanie po nazwie lub kluczu. Lista pochodzi wprost z `ParamStore`, więc obejmuje też parametry spoza kart układu; zapisane wcześniej profile dostają kartę przy wczytaniu (profil w wersji 3).
+
 ### Poprawione
 - Przycisk chwilowy na kontrolerze puszczony po zmianie warstwy SHIFT (SOLO puszczone lub wciśnięte w trakcie) zwalnia ten sam parametr, zamiast zostawić go włączonego.
 - Odłączenie kontrolera (lub awaria portu), zmiana profilu, wyczyszczenie albo wczytanie mapy MIDI w chwili trzymania przycisku chwilowego zostawiały parametr włączony na stałe (syrena grała bez końca, FX PANIC trzymał efekty wyciszone, DRY CUT – muzykę). Teraz takie parametry są puszczane, a przełącznik wciśnięty w tej chwili działa przy pierwszym naciśnięciu po ponownym podłączeniu.

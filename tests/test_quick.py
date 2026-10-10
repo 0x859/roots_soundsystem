@@ -376,6 +376,39 @@ def _pump(app, n=4):
         app.processEvents()
 
 
+def test_all_params_groups_and_search(params, store):
+    groups = params.groups()
+    assert sum(g["count"] for g in groups) == len(store.specs)
+    echo = next(g for g in groups if g["key"] == "echo")
+    assert echo["title"] == "ECHO" and echo["color"] == "fx"
+    assert params.paramKeys("echo", "") == [k for k in store.specs if k.startswith("echo.")]
+    assert params.paramKeys("", "swell") == ["echo.swell"]
+    assert params.paramKeys("", store.specs["room.size"].label.upper()) == ["room.size"]  # po etykiecie
+    assert params.paramKeys("", "  ") == []  # puste wyszukiwanie bez grupy = nic
+    assert params.paramKeys("nie_ma", "") == []
+
+
+def test_all_params_view_runs_without_warnings(app, desk, store):
+    msgs = []
+    qInstallMessageHandler(lambda _mode, _ctx, msg: msgs.append(msg))
+    try:
+        assert desk.ok, desk.error_text()
+        root = desk.rootObject()
+        desk.session.setProperty("screen", "config")
+        _pump(app)
+        for g in desk.params.groups():
+            root.setProperty("allGroup", g["key"])
+            _pump(app)
+        root.setProperty("allFilter", "kill")
+        _pump(app)
+        store.set("iso.kill.sub", True)
+        root.setProperty("allFilter", "")
+        _pump(app)
+    finally:
+        qInstallMessageHandler(None)
+    assert not [m for m in msgs if "qml" in m.lower() or "error" in m.lower() or "undefined" in m.lower()], msgs
+
+
 def test_theme_fits_viewport(app):
     from ui import layout_profile as lp
     from ui.quick import QmlTheme
