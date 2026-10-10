@@ -308,3 +308,92 @@ def test_momentary_released_in_other_layer(mix, store, shift_first):
     mix.handle(note(27, not shift_first))
     mix.handle(note(3, False))
     assert store["out.fx_panic"] is False and store["echo.throw"] is False
+
+
+# --- trzymane przyciski i błędy portów ---
+@pytest.fixture
+def plugged(store, monkeypatch):
+    import engine.midi as em
+
+    fake = FakeMido(["MIDI Mix 0"])
+    monkeypatch.setattr(em, "mido", fake)
+    m = MidiController(store)
+    m.backend = "fake"
+    events = []
+    m.on_status = events.append
+    assert m.ensure_connected(None)
+    return m, fake, events
+
+
+@pytest.mark.parametrize("how", ["unplug", "profile", "clear", "json"])
+def test_held_momentary_released_when_controller_or_map_goes(plugged, store, how):
+    """Trzymany przycisk chwilowy (syrena, FX PANIC) nie zostaje włączony na stałe po odłączeniu
+    kontrolera, zmianie profilu, wyczyszczeniu ani wczytaniu mapy – puszczenia już nie będzie."""
+    m, fake, _events = plugged
+    m.handle(note(6, True))  # Rec Arm 2 = syrena
+    m.handle(note(27, True))  # SOLO
+    m.handle(note(3, True))  # SOLO + Rec Arm 1 = FX PANIC
+    assert store["siren.trigger"] and store["out.fx_panic"]
+    if how == "unplug":
+        fake.names = []
+        assert m.ensure_connected(None) is False
+    elif how == "profile":
+        m.apply_profile("Akai MIDImix")
+    elif how == "clear":
+        m.clear()
+    else:
+        m.load_json(m.to_json())
+    assert store["siren.trigger"] is False and store["out.fx_panic"] is False
+
+
+def test_toggle_after_unplug_works_on_first_press(plugged, store):
+    """Przełącznik wciśnięty w chwili odłączenia: po ponownym podłączeniu pierwsze naciśnięcie działa."""
+    m, fake, _events = plugged
+    m.handle(note(1, True))  # MUTE 1 = kill sub (przełącznik), kabel wyjęty przed puszczeniem
+    assert store["iso.kill.sub"] is True
+    fake.names = []
+    m.ensure_connected(None)
+    fake.names = ["MIDI Mix 0"]
+    assert m.ensure_connected(None)
+    m.handle(note(1, True))
+    assert store["iso.kill.sub"] is False
+
+
+def test_poll_error_reports_disconnect(plugged, store):
+    m, _fake, events = plugged
+
+    def broken():
+        raise OSError("port zniknął")
+
+    m.handle(note(6, True))  # syrena trzymana w chwili awarii portu
+    m.port = SimpleNamespace(iter_pending=broken, close=lambda: None)
+    m.poll()
+    assert m.port is None and events == ["connected", "disconnected"]
+    assert store["siren.trigger"] is False
+
+
+def test_led_send_error_closes_output(mix):
+    closed = []
+
+    class Broken:
+        def send(self, msg):
+            raise OSError("port zniknął")
+
+        def close(self):
+            closed.append(1)
+
+    mix.out_port = Broken()
+    mix.handle(note(1, True))  # MUTE 1: dioda do wysłania
+    mix.flush_leds()
+    assert mix.out_port is None and closed == [1]
+
+
+def test_legacy_json_replaces_whole_map(mix):
+    """Stary format (płaski słownik) zastępuje całą mapę: bez resztek warstwy SHIFT i diod profilu."""
+    rev = mix.revision
+    port = mix.out_port
+    mix.load_json('{"cc:0:1": "echo.feedback"}')
+    assert mix.mapping == {"cc:0:1": "echo.feedback"}
+    assert mix.shift_mapping == {} and mix.shift_id is None and mix.feedback == set()
+    assert mix.profile_name is None and mix.revision > rev
+    assert len(port.sent) == 16 and all(v == 0 for _, v in port.sent)  # diody starego profilu zgaszone

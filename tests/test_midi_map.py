@@ -117,6 +117,16 @@ def test_profile_learning_pickup_slots(qmidi):
     assert len(qmidi.property("strips")) == 9
 
 
+def test_intro_toggle_slot(qmidi):
+    changed = []
+    qmidi.stateChanged.connect(lambda: changed.append(1))
+    assert qmidi.property("intro")  # domyślnie włączona
+    qmidi.setIntro(False)
+    assert not qmidi.ctl.intro_enabled and not qmidi.property("intro") and changed
+    qmidi.setIntro(True)  # bez portu wyjściowego: tylko ustawienie, bez animacji
+    assert qmidi.ctl.intro_enabled and not qmidi.ctl.intro_running
+
+
 # --- okno główne ---
 @pytest.fixture
 def window(app, tmp_path, monkeypatch):
@@ -175,3 +185,11 @@ def test_window_midi_status_saves_port(window):
     win.midi.port_name = None
     win._on_midi_status("disconnected")
     assert "odłączony" in toasts[-1]
+
+
+def test_window_saves_intro_setting(window):
+    win = window
+    assert win.midi.intro_enabled  # brak wpisu = włączona
+    win.qmidi.setIntro(False)
+    win.save_settings()
+    assert win.settings.value("midi/intro") == "false"

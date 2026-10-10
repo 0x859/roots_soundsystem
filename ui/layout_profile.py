@@ -15,8 +15,15 @@ from typing import Any
 
 from engine.params import ParamSpec
 
-VERSION = 1
+VERSION = 2
 DEFAULT_NAME = "Domyślny"
+# Cele dodane do układu domyślnego w kolejnych wersjach profilu. Profil zapisany w starszej wersji
+# dostaje je przy wczytaniu w tym samym miejscu co w `default_profile` (kontrolki, pady, skróty),
+# a to, co użytkownik usunął w bieżącej wersji, nie wraca. Nowa kontrolka w `default_profile`
+# = wpis tutaj + podbicie VERSION (test pilnuje).
+ADDED: dict[int, tuple[str, ...]] = {
+    2: ("echo.swell", "mic.throw", "out.fx_panic", "iso.position", "preamp.cut", "sim.enabled"),
+}
 
 CONTROL_TYPES = ("knob", "fader", "button", "pad", "meter", "value")
 SIZES = ("S", "M", "L")
@@ -466,7 +473,7 @@ def normalize(raw: Any, specs: dict[str, ParamSpec]) -> dict[str, Any]:
             if nk and isinstance(target, str) and is_target(target, specs) and target not in VIEWS:
                 shortcuts[nk] = target
     name = raw.get("name")
-    return {
+    prof = {
         "version": VERSION,
         "name": name.strip()[:60] if isinstance(name, str) and name.strip() else DEFAULT_NAME,
         "cards": cards,
@@ -474,6 +481,46 @@ def normalize(raw: Any, specs: dict[str, ParamSpec]) -> dict[str, Any]:
         "shortcuts": shortcuts,
         "theme": _theme_norm(raw.get("theme")),
     }
+    version = raw.get("version")
+    if isinstance(version, int) and not isinstance(version, bool) and version < VERSION:
+        _migrate(prof, version, specs)
+    return prof
+
+
+def _insert_after(items: list[dict], default_items: list[dict], idx: int) -> int:
+    """Pozycja dla `default_items[idx]`: za najbliższym poprzednikiem z układu domyślnego obecnym w `items`."""
+    present = [x["param"] for x in items]
+    for prev in reversed(default_items[:idx]):
+        if prev["param"] in present:
+            return present.index(prev["param"]) + 1
+    return 0
+
+
+def _migrate(prof: dict[str, Any], version: int, specs: dict[str, ParamSpec]) -> None:
+    """Dokłada do profilu ze starszej wersji cele dodane później do układu domyślnego (`ADDED`)."""
+    default = normalize(default_profile(), specs)
+    for target in (t for v in sorted(ADDED) if v > version for t in ADDED[v]):
+        in_cards = any(c["param"] == target for card in prof["cards"] for c in card["controls"])
+        for dcard in default["cards"]:
+            idx = next((i for i, c in enumerate(dcard["controls"]) if c["param"] == target), None)
+            if idx is None or in_cards:
+                continue
+            card = next((c for c in prof["cards"] if c["id"] == dcard["id"]), None)
+            if card is None:  # karta usunięta – wraca tylko z nową kontrolką
+                card = copy.deepcopy(dcard) | {"controls": [], "more": 0}
+                prof["cards"].append(card)
+            pos = _insert_after(card["controls"], dcard["controls"], idx)
+            card["controls"].insert(pos, copy.deepcopy(dcard["controls"][idx]))
+            # widoczna w układzie domyślnym → widoczna też tutaj (bez chowania innych pod „WIĘCEJ”)
+            if 0 < card["more"] and pos <= card["more"] and idx < dcard["more"]:
+                card["more"] += 1
+            in_cards = True
+        pidx = next((i for i, p in enumerate(default["pads"]) if p["param"] == target), None)
+        if pidx is not None and all(p["param"] != target for p in prof["pads"]):
+            prof["pads"].insert(_insert_after(prof["pads"], default["pads"], pidx), dict(default["pads"][pidx]))
+        for key, t in default["shortcuts"].items():
+            if t == target and key not in prof["shortcuts"] and target not in prof["shortcuts"].values():
+                prof["shortcuts"][key] = target
 
 
 def shortcut_for(profile: dict[str, Any], target: str) -> str:

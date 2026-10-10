@@ -68,6 +68,7 @@ class SpringReverb:
         """FX PANIC (wątek sterujący): wyciszenie i czysty stan; przytrzymany efekt milczy."""
         self.held = bool(on)
         if on:
+            self._crash_armed = False  # CRASH z tej samej zmiany co PANIC też nie czeka na puszczenie
             self.switch.flush()
         self.switch.set(self.enabled and not self.held)
 
@@ -77,7 +78,8 @@ class SpringReverb:
         self.ret.set(float(p["spring.return"]))
         self.loop.set_sos(np.vstack([lowpass(float(p["spring.tone"]), 0.707, self.fs)] + [stretched_allpass(0.5)] * 4))
         crash = bool(p["spring.crash"])
-        if crash and not self._crash_prev and self.enabled:  # CRASH przy wyłączonej sprężynie nie czeka
+        # CRASH przy wyłączonej sprężynie albo trzymanym FX PANIC nie czeka na ich koniec
+        if crash and not self._crash_prev and self.enabled and not self.held:
             self._crash_armed = True
         self._crash_prev = crash
         self.switch.set(self.enabled and not self.held)

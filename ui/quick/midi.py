@@ -109,7 +109,7 @@ class QmlMidi(QObject):
     def tick(self) -> None:
         """Wołane z timera okna (~30 Hz): emituje sygnały tylko przy zmianach."""
         c = self.ctl
-        flags = (c.port_name, c.out_port is not None, c.profile_name, c.learning, c.pickup, c.available)
+        flags = (c.port_name, c.out_port is not None, c.profile_name, c.learning, c.pickup, c.available, c.intro_enabled)
         if c.revision != self._rev or flags != self._flags:
             self._rev, self._flags = c.revision, flags
             self._rebuild()
@@ -167,6 +167,10 @@ class QmlMidi(QObject):
     @Property(bool, notify=stateChanged)
     def pickup(self) -> bool:
         return self.ctl.pickup
+
+    @Property(bool, notify=stateChanged)
+    def intro(self) -> bool:
+        return self.ctl.intro_enabled
 
     @Property("QVariantList", notify=stateChanged)
     def strips(self) -> list[dict]:
@@ -246,6 +250,12 @@ class QmlMidi(QObject):
     @Slot(bool)
     def setPickup(self, on: bool) -> None:
         self.ctl.pickup = on
+        self.tick()
+
+    @Slot(bool)
+    def setIntro(self, on: bool) -> None:
+        """Animacja powitalna diod po podłączeniu; włączenie od razu pokazuje ją na kontrolerze."""
+        self.ctl.set_intro(on)
         self.tick()
 
     @Slot(str, str, bool)

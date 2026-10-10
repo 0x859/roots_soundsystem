@@ -12,6 +12,7 @@ MINOR odpowiada etapowi planu (`docs/PLAN.md`), PATCH – poprawkom w jego obrę
   - FX PANIC (`out.fx_panic`, karta WYJŚCIE, skrót `P`): wycisza i czyści echo i sprężynę, przytrzymany trzyma je wyciszone; ostrzeżenie „ECHO ↑ PANIC” w nagłówku LIVE, gdy echo się rozkręca;
   - THROW MIC (`mic.throw`, skrót `V`): chwilowo cały mikrofon do echa; SWELL (`echo.swell`, skrót `W`): przytrzymanie podnosi sprzężenie do samooscylacji;
   - MIDImix: SOLO + Rec Arm 1/2/3/6 = FX PANIC, THROW MIC, SWELL, MONO.
+- Animacja powitalna diod kontrolera po podłączeniu (start z podpiętym MIDImix, podpięcie w trakcie, wybór portu): fala przez przyciski MUTE/REC ARM od lewej i błysk (~1,2 s), potem diody wracają do stanu parametrów. Sterowanie działa w trakcie animacji. Wyłączana przyciskiem **POWITANIE** na karcie MIDI – KONTROLER albo w menu MIDI (ustawienie `midi/intro`, domyślnie włączona); włączenie od razu ją pokazuje.
 
 ### Zmienione
 - MIDImix: Rec Arm 6 to teraz DRY CUT (MONO przeniesione na SOLO + Rec Arm 6).
@@ -19,6 +20,10 @@ MINOR odpowiada etapowi planu (`docs/PLAN.md`), PATCH – poprawkom w jego obrę
 
 ### Poprawione
 - Przycisk chwilowy na kontrolerze puszczony po zmianie warstwy SHIFT (SOLO puszczone lub wciśnięte w trakcie) zwalnia ten sam parametr, zamiast zostawić go włączonego.
+- Odłączenie kontrolera (lub awaria portu), zmiana profilu, wyczyszczenie albo wczytanie mapy MIDI w chwili trzymania przycisku chwilowego zostawiały parametr włączony na stałe (syrena grała bez końca, FX PANIC trzymał efekty wyciszone, DRY CUT – muzykę). Teraz takie parametry są puszczane, a przełącznik wciśnięty w tej chwili działa przy pierwszym naciśnięciu po ponownym podłączeniu.
+- CRASH wciśnięty przy trzymanym FX PANIC odpalał się dopiero po puszczeniu PANIC – teraz jest ignorowany (jak przy wyłączonej sprężynie).
+- MIDI: awaria portu wejściowego pokazuje komunikat o odłączeniu; błąd wysyłania na diody zamyka port wyjściowy; import mapy w starym formacie zastępuje całą mapę (bez resztek warstwy SHIFT i diod poprzedniego profilu), a diody starej mapy gasną przy każdym wczytaniu.
+- Profil układu zapisany przed dodaniem nowych kontrolek (SWELL, THROW MIC, FX PANIC, położenie izolatora, przełącznik modeli kolumn, pad DRY CUT i ich skróty) nie pokazywał ich – sceny zmieniały te parametry bez widocznej kontrolki. Profil ma teraz wersję (2): przy wczytaniu starszego dochodzą brakujące kontrolki w miejscach jak w układzie domyślnym, a usunięte przez użytkownika w bieżącej wersji nie wracają.
 
 ## [0.2.0] – 2026-10-09
 

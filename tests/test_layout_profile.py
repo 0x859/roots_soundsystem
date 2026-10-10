@@ -132,6 +132,63 @@ def test_export_import(store, tmp_path):
     assert back["cards"] == prof["cards"]
 
 
+def _targets(prof):
+    out = {ctl["param"] for card in prof["cards"] for ctl in card["controls"]}
+    return out | {p["param"] for p in prof["pads"]} | set(prof["shortcuts"].values())
+
+
+def _strip(prof, targets):
+    """Profil bez podanych celów, jak zapisany przed ich dodaniem do układu domyślnego."""
+    old = copy.deepcopy(prof)
+    for card in old["cards"]:
+        kept = [c for c in card["controls"] if c["param"] not in targets]
+        visible = card["controls"][: card["more"]]
+        if card["more"]:
+            card["more"] -= sum(1 for c in visible if c["param"] in targets)
+        card["controls"] = kept
+    old["pads"] = [p for p in old["pads"] if p["param"] not in targets]
+    old["shortcuts"] = {k: t for k, t in old["shortcuts"].items() if t not in targets}
+    return old
+
+
+def test_old_profile_gets_controls_added_to_default(store):
+    """Zapisany wcześniej profil dostaje nowe kontrolki układu domyślnego – w tym samym miejscu."""
+    default = lp.normalize(lp.default_profile(), store.specs)
+    added = {t for v in lp.ADDED for t in lp.ADDED[v]}
+    old = _strip(default, added)
+    old["version"] = 1
+    assert not added & _targets(old)
+    assert lp.normalize(old, store.specs) == default
+
+
+def test_migration_keeps_user_choices(store):
+    default = lp.normalize(lp.default_profile(), store.specs)
+    old = _strip(default, set(lp.ADDED[2]))
+    old["version"] = 1
+    old["cards"] = [c for c in old["cards"] if c["id"] != "out"]  # karta usunięta przez użytkownika
+    old["cards"][0]["controls"].append({"param": "mic.throw", "type": "button", "size": "S"})
+    old["shortcuts"]["C"] = "out.mute"  # klawisz zajęty przez użytkownika
+    prof = lp.normalize(old, store.specs)
+    where = [(c["id"], x["param"]) for c in prof["cards"] for x in c["controls"]]
+    assert where.count(("preamp", "mic.throw")) == 1 and ("mic", "mic.throw") not in where  # bez duplikatu
+    assert ("out", "out.fx_panic") in where  # brakująca karta wraca tylko z nową kontrolką
+    assert [x["param"] for x in next(c for c in prof["cards"] if c["id"] == "out")["controls"]] == ["out.fx_panic"]
+    assert prof["shortcuts"]["C"] == "out.mute" and "preamp.cut" not in prof["shortcuts"].values()
+    assert prof["shortcuts"]["P"] == "out.fx_panic"
+    # w aktualnej wersji usunięta kontrolka nie wraca
+    cur = _strip(default, {"echo.swell"})
+    assert "echo.swell" not in _targets(lp.normalize(cur, store.specs))
+
+
+def test_new_default_controls_are_registered(store):
+    """Nowa kontrolka w układzie domyślnym wymaga wpisu w `lp.ADDED` i podbicia `lp.VERSION`
+    (inaczej nie trafi do profili zapisanych wcześniej) – potem zaktualizuj tę liczbę."""
+    default = lp.normalize(lp.default_profile(), store.specs)
+    assert max(lp.ADDED) == lp.VERSION
+    assert {t for v in lp.ADDED for t in lp.ADDED[v]} <= _targets(default)
+    assert len(_targets(default)) == 142
+
+
 def test_card_height(store):
     raw = {"cards": [{"title": "A", "height": 300}, {"title": "B", "height": 99999}, {"title": "C", "height": "x"}]}
     prof = lp.normalize(raw, store.specs)

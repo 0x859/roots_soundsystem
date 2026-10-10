@@ -72,7 +72,7 @@ hiddenimports = [
     "presets",
     "presets.store",
     "presets.builtin",
-    "engine.audio",
+    "engine.audio_engine",
     "engine.midi",
     "engine.params",
     "dsp.graph",

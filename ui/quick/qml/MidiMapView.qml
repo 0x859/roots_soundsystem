@@ -78,6 +78,13 @@ Column {
             enabledLook: root.interactive
             onClicked: Midi.setPickup(!Midi.pickup)
         }
+        FlatButton {
+            // animacja diod po podłączeniu kontrolera; włączenie pokazuje ją od razu
+            text: "POWITANIE"
+            checked: Midi.intro
+            enabledLook: root.interactive
+            onClicked: Midi.setIntro(!Midi.intro)
+        }
         FlatButton { text: "EKSPORT"; enabledLook: root.interactive; onClicked: Midi.requestFile("export") }
         FlatButton { text: "IMPORT"; enabledLook: root.interactive; onClicked: Midi.requestFile("import") }
         FlatButton {

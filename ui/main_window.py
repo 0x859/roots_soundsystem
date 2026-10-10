@@ -174,6 +174,7 @@ class MainWindow(QMainWindow):
         self.midi.on_status = self._on_midi_status
         self._siren_mem = -1
         self.midi.load_json(settings.value("midi/mapping"))
+        self.midi.intro_enabled = settings.value("midi/intro", "true") in (True, "true")
         self.bridge.touched.connect(self._on_touched)
 
         self._resp_timer = QTimer(self, singleShot=True, interval=60, timeout=self._update_responses)
@@ -383,6 +384,10 @@ class MainWindow(QMainWindow):
         pickup.setCheckable(True)
         pickup.setChecked(self.midi.pickup)
         pickup.toggled.connect(lambda on: setattr(self.midi, "pickup", on))
+        intro = m.addAction("Animacja diod po podłączeniu kontrolera")
+        intro.setCheckable(True)
+        intro.setChecked(self.midi.intro_enabled)
+        intro.toggled.connect(self.midi.set_intro)
         leds = m.addAction("Diody kontrolera: " + ("aktywne" if self.midi.out_port is not None else "brak portu wyjściowego"))
         leds.setEnabled(False)
         m.addSeparator()
@@ -1049,6 +1054,7 @@ class MainWindow(QMainWindow):
         s.setValue("audio/channel_map", json.dumps(self.channel_map))
         s.setValue("state/params", json.dumps(self.store.snapshot(scene_only=True)))
         s.setValue("midi/mapping", self.midi.to_json())
+        s.setValue("midi/intro", "true" if self.midi.intro_enabled else "false")
         s.setValue("ui/view", self.view)
         s.setValue("ui/layout_profile", self.layout_model.profile["name"])
         self.layout_model.flush()

@@ -1,5 +1,6 @@
 """Sterowanie kontrolerem MIDI: mapowanie (learn i gotowe profile), warstwa SHIFT,
-przejęcie wartości (pickup), akcje oraz diody kontrolera (wyjście MIDI).
+przejęcie wartości (pickup), akcje oraz diody kontrolera (wyjście MIDI, z animacją powitalną
+po podłączeniu – `engine/midi_intro.py`).
 
 Komunikaty są odpytywane z timera GUI (`poll`), więc nie ma dodatkowych wątków.
 Backend: python-rtmidi, a gdy go brak - pygame (pygame-ce).
@@ -9,10 +10,12 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
+from .midi_intro import LedIntro, intro_frames, led_columns
 from .midi_profiles import ACTIONS, PROFILES, MidiProfile, Strip, profile_for_port
 from .params import ParamStore
 
@@ -102,6 +105,9 @@ class MidiController:
         self._latched: set[tuple[str, str]] = set()
         self._led_dirty: set[str] = set()
         self._led_sent: dict[str, int] = {}
+        self.intro_enabled = True  # animacja powitalna diod po podłączeniu (ustawienie okna midi/intro)
+        self.clock: Callable[[], float] = time.monotonic
+        self._intro: LedIntro | None = None
         store.subscribe(self._on_params)
 
     # --- porty ---
@@ -144,6 +150,7 @@ class MidiController:
             if profile is not None:
                 self.apply_profile(profile)
         self._mark_all_leds()
+        self.play_intro()
         self.revision += 1
 
     def ensure_connected(self, saved: str | None) -> bool:
@@ -180,6 +187,8 @@ class MidiController:
             self.on_status(status)
 
     def close(self) -> None:
+        self._release_held()
+        self._intro = None  # diody animacji należą do `feedback`, więc gasi je leds_off
         if self.out_port is not None:
             self.leds_off()
             try:
@@ -201,6 +210,8 @@ class MidiController:
     def apply_profile(self, profile: MidiProfile | str) -> None:
         if isinstance(profile, str):
             profile = PROFILES[profile]
+        self.stop_intro()
+        self._release_held()
         self.profile_name = profile.name
         self.mapping = dict(profile.mapping)
         self.shift_mapping = dict(profile.shift_mapping)
@@ -208,8 +219,6 @@ class MidiController:
         self.feedback = set(profile.feedback)
         self.pickup = profile.pickup
         self._latched.clear()
-        self._toggle_state.clear()
-        self._held.clear()
         self._mark_all_leds()
         self.revision += 1
 
@@ -246,6 +255,8 @@ class MidiController:
             self.armed_key = key
 
     def clear(self) -> None:
+        self.stop_intro()
+        self._release_held()
         self.leds_off()
         self.mapping.clear()
         self.shift_mapping.clear()
@@ -281,9 +292,11 @@ class MidiController:
             return
         if not isinstance(data, dict):
             return
-        if data.get("version") != 2:  # stary format: płaski słownik element -> parametr
-            self.mapping = {k: v for k, v in data.items() if self._valid_target(v)}
-            return
+        self.stop_intro()
+        self._release_held()
+        self.leds_off()  # nowa mapa może mieć inne diody (albo żadnych)
+        if data.get("version") != 2:  # stary format: płaski słownik element -> parametr (cała mapa, bez SHIFT)
+            data = {"version": 2, "mapping": data, "pickup": self.pickup}
         self.mapping = {k: v for k, v in (data.get("mapping") or {}).items() if self._valid_target(v)}
         self.shift_mapping = {k: v for k, v in (data.get("shift_mapping") or {}).items() if self._valid_target(v)}
         self.shift_id = data.get("shift") or None
@@ -305,8 +318,9 @@ class MidiController:
             try:
                 for msg in self.port.iter_pending():
                     self.handle(msg)
-            except Exception:
+            except Exception:  # port zniknął (np. wyjęty kabel) – watchdog połączy ponownie
                 self.close()
+                self._notify("disconnected")
         self.flush_leds()
 
     @staticmethod
@@ -425,13 +439,83 @@ class MidiController:
         try:
             self.out_port.send(_note_message(int(ch), int(num), velocity))
             self._led_sent[mid] = velocity
-        except Exception:
-            self.out_port = None
+        except Exception:  # bez diod dalej; port zamykamy, żeby nie wisiał otwarty w sterowniku
+            port, self.out_port = self.out_port, None
+            try:
+                port.close()
+            except Exception:
+                pass
+
+    def _release_held(self) -> None:
+        """Puszcza parametry trzymane przyciskami chwilowymi, gdy port znika albo zmienia się mapa –
+        puszczenia już nie będzie, a syrena, FX PANIC czy DRY CUT zostałyby włączone na stałe."""
+        held, self._held = self._held, {}
+        self._toggle_state.clear()  # przełącznik wciśnięty w tej chwili zadziała przy pierwszym naciśnięciu
+        for target in held.values():
+            self.store.set(target, False, source=SOURCE)
+
+    # --- animacja powitalna diod ---
+    @property
+    def intro_running(self) -> bool:
+        return self._intro is not None
+
+    def play_intro(self) -> bool:
+        """Odtwarza (od początku) animację powitalną diod; False, gdy wyłączona albo brak diod/portu.
+
+        Klatki idą z `flush_leds` (timer okna), sterowanie działa normalnie, a zmiany diod czekają
+        do końca animacji – wtedy wszystkie diody dostają stan z `ParamStore`."""
+        self._intro = None
+        if not self.intro_enabled or self.out_port is None:
+            return False
+        frames = intro_frames(led_columns(self.layout, self.feedback))
+        if not frames:
+            return False
+        self._intro = LedIntro(frames)
+        return True
+
+    def stop_intro(self) -> None:
+        """Przerywa animację: gasi zapalone przez nią diody i odświeża stan wszystkich diod."""
+        intro, self._intro = self._intro, None
+        if intro is None:
+            return
+        if self.out_port is not None:
+            for mid in sorted(intro.mids):
+                if self._led_sent.get(mid):
+                    self._send_led(mid, 0)
+                if self.out_port is None:
+                    break
+        self._mark_all_leds()
+
+    def set_intro(self, on: bool) -> None:
+        """Włącza/wyłącza animację; włączenie od razu ją pokazuje (podgląd na kontrolerze)."""
+        self.intro_enabled = bool(on)
+        if self.intro_enabled:
+            self.play_intro()
+        else:
+            self.stop_intro()
+
+    def _step_intro(self) -> bool:
+        """Wysyła bieżącą klatkę (tylko zmienione diody); False, gdy animacja właśnie się skończyła."""
+        frame = self._intro.frame(self.clock())
+        if frame is None:
+            self._intro = None
+            self._mark_all_leds()  # pełne odświeżenie stanu z ParamStore
+            return False
+        for mid, v in frame.items():
+            if self._led_sent.get(mid) != v:
+                self._send_led(mid, v)
+                if self.out_port is None:
+                    self._intro = None
+                    break
+        return True
 
     def flush_leds(self) -> None:
         if self.out_port is None:
+            self._intro = None
             self._led_dirty.clear()
             return
+        if self._intro is not None and self._step_intro():
+            return  # w trakcie animacji zmiany diod zbierają się w _led_dirty
         if not self._led_dirty:
             return
         dirty, self._led_dirty = self._led_dirty, set()

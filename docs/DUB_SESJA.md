@@ -104,7 +104,7 @@ Nakład: S = do 1 dnia, M = kilka dni, L = tydzień i więcej.
 - **Pełne decki DJ-skie** (crossfader, waveform, biblioteka): poza zakresem. Selekcję prowadzi zewnętrzny odtwarzacz przez VB-Cable.
 - **Loopback jako źródło przy odsłuchu lub nagrywaniu na 3–4**: ryzyko pętli sprzężenia (`ui/audio_config.py`).
 - **Callback audio**: żadnego I/O ani alokacji o zmiennym rozmiarze; bufory nowych modułów w `__init__`; wersja bez numba wektorowa.
-- **Nowe moduły z `.enabled`** trafiają do `DSP_SWITCHES` i licznika „DSP n/9”: `Switch(on_reset=…)` + test w `tests/test_switching.py`. Sampler nie musi mieć `.enabled`.
+- **Nowe moduły z `.enabled`** trafiają do `DSP_SWITCHES` i licznika „DSP n/8”: `Switch(on_reset=…)` + test w `tests/test_switching.py`. Sampler nie musi mieć `.enabled`.
 - **Każda nowa akcja** do `ACTIONS` i etykiet w `layout_profile` (test pilnuje nadzbioru). Gesty chwilowe: `momentary=True, scene=False`.
 - **Nie przypisywać ciągłych parametrów do SHIFT na suwakach 1–5**: dziś odpadają do izolatora, a pickup na żywo myli.
 

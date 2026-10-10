@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from dsp.common import Switch
-from dsp.graph import SignalChain, bypass_values
+from dsp.graph import DSP_SWITCHES, SignalChain, bypass_values
 
 FS, B = 48000, 512
 
@@ -19,6 +19,11 @@ CASES = {
     "iso.enabled": {"iso.g.sub": 6.0},
     "sim.enabled": {"sim.bassfeel": 1.0},
 }
+
+
+def test_cases_cover_all_dsp_switches():
+    """Każdy moduł z `enabled` ma przypadek w CASES – nowy moduł nie ominie testów przełączania."""
+    assert set(CASES) == set(DSP_SWITCHES)
 
 
 def _chain(store, values):
@@ -84,6 +89,24 @@ def test_crash_with_enabling_spring_plays(store):
     _run(chain, 10, level=0.0)
     store.set_many({"spring.enabled": True, "spring.crash": True})
     assert np.max(np.abs(_run(chain, 20, level=0.0))) > 0.01
+
+
+@pytest.mark.parametrize("together", [False, True])
+def test_crash_during_held_panic_does_not_fire_later(store, together):
+    """CRASH wciśnięty, gdy FX PANIC trzyma sprężynę wyciszoną (także w tej samej zmianie), nie odpala
+    się po puszczeniu PANIC – jak CRASH przy wyłączonej sprężynie."""
+    chain = _chain(store, {"spring.enabled": True})
+    _run(chain, 20, level=0.0)
+    if together:
+        store.set_many({"out.fx_panic": True, "spring.crash": True})
+    else:
+        store.set("out.fx_panic", True)
+        _run(chain, 10, level=0.0)
+        store.set("spring.crash", True)
+    store.set("spring.crash", False)
+    _run(chain, 20, level=0.0)
+    store.set("out.fx_panic", False)
+    assert np.max(np.abs(_run(chain, 40, level=0.0))) < 1e-6
 
 
 def test_quick_toggle_keeps_effect_working(store):
