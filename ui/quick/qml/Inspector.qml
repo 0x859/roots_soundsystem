@@ -506,6 +506,16 @@ Rectangle {
                         onPressedChanged: if (!pressed) Profile.setTheme("minCardWidth", value)
                     }
 
+                    Caption { text: "BLOKADA LIVE – PRZYTRZYMANIE: " + Theme.lockHoldMs + " ms" }
+                    Slider {
+                        width: parent.width
+                        from: 300
+                        to: 3000
+                        stepSize: 100
+                        value: Theme.lockHoldMs
+                        onPressedChanged: if (!pressed) Profile.setTheme("lockHoldMs", value)
+                    }
+
                     Caption { text: "KOLORY (#RRGGBB)" }
                     Repeater {
                         model: [["accent", "Akcent (tor)"], ["fx", "Efekty"], ["kill", "Kill / stop"], ["bg", "Tło"],

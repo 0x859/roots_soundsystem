@@ -46,6 +46,7 @@ class QmlSession(QObject):
     metersChanged = Signal()
     screenChanged = Signal()
     editingChanged = Signal()
+    lockedChanged = Signal()
     devicesChanged = Signal()
     pickupChanged = Signal()
     eqPresetsChanged = Signal()
@@ -69,6 +70,7 @@ class QmlSession(QObject):
         self._mic_gr = 0.0
         self._screen = "live"
         self._editing = False
+        self._locked = False
         self._devices: dict[str, Any] = {}
         self._pickup: dict[str, float] = {}
         self._presets: dict[str, list[dict]] = {"eq": [], "siren": []}
@@ -142,6 +144,24 @@ class QmlSession(QObject):
             self.editingChanged.emit()
 
     editing = Property(bool, _get_editing, _set_editing, notify=editingChanged)
+
+    def _get_locked(self) -> bool:
+        return self._locked
+
+    def _set_locked(self, value: bool) -> None:
+        if bool(value) != self._locked:
+            self._locked = bool(value)
+            self.lockedChanged.emit()
+
+    # blokada LIVE: bez kółka i dwukliku na kontrolkach, bez zwijania kart; STOP, KONFIGURACJA, ✎ UKŁAD,
+    # DSP i mapa MIDI dopiero po przytrzymaniu. Pady, skróty i kontroler MIDI działają bez zmian.
+    locked = Property(bool, _get_locked, _set_locked, notify=lockedChanged)
+
+    @Slot()
+    def toggleLock(self) -> None:
+        self._set_locked(not self._locked)
+        self.toast.emit("BLOKADA LIVE włączona – przytrzymaj, aby użyć STOP i KONFIGURACJI" if self._locked
+                        else "BLOKADA LIVE wyłączona")
 
     @Property("QVariantMap", notify=devicesChanged)
     def devices(self) -> dict[str, Any]:
@@ -251,6 +271,11 @@ class QmlSession(QObject):
     @Slot(str, "QVariant")
     def requestWith(self, action: str, arg: Any) -> None:
         self.requested.emit(action, arg)
+
+    @Slot(str)
+    def hint(self, text: str) -> None:
+        """Krótki komunikat na dole ekranu (np. „przytrzymaj” przy blokadzie)."""
+        self.toast.emit(text)
 
     @Slot(str, result=str)
     def midiFor(self, key: str) -> str:

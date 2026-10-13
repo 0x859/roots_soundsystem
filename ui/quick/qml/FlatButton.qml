@@ -9,6 +9,8 @@ Rectangle {
     property bool danger: false
     property bool enabledLook: true
     property real fontSize: 15
+    property bool hold: false  // działa dopiero po przytrzymaniu (blokada LIVE)
+    property string hint: "BLOKADA LIVE – przytrzymaj, aby użyć"
     signal clicked()
 
     readonly property real s: Theme.scale
@@ -30,11 +32,13 @@ Rectangle {
         font.pixelSize: Math.round(root.fontSize * root.s)
         font.letterSpacing: 1
     }
-    MouseArea {
+    HoldArea {
         id: area
         anchors.fill: parent
         hoverEnabled: true
         enabled: root.enabledLook
-        onClicked: root.clicked()
+        hold: root.hold
+        hint: root.hint
+        onActivated: root.clicked()
     }
 }

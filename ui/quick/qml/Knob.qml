@@ -112,8 +112,10 @@ Item {
                     const fine = (m.modifiers & Qt.ShiftModifier) ? 0.25 : 1.0
                     root.param.setNorm(startNorm + (startY - m.y) / 200 * fine)
                 }
-                onDoubleClicked: root.param.reset()
+                // blokada LIVE: dwuklik nic nie robi, kółko przewija ekran zamiast zmieniać wartość
+                onDoubleClicked: if (!Session.locked) root.param.reset()
                 onWheel: (w) => {
+                    if (Session.locked) { w.accepted = false; return }
                     const fine = (w.modifiers & Qt.ShiftModifier) ? 0.2 : 1.0
                     root.param.setNorm(root.norm + w.angleDelta.y / 120 * 0.02 * fine)
                 }

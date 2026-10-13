@@ -108,6 +108,7 @@ class QmlTheme(QObject):
     minCardWidth = Property(int, lambda s: int(s._t["minCardWidth"] * s._scale()), notify=changed)
     tiles = Property(bool, lambda s: bool(s._t["tiles"]), notify=changed)
     inspectorWidth = Property(int, lambda s: int(s._t["inspectorWidth"]), notify=changed)
+    lockHoldMs = Property(int, lambda s: int(s._t.get("lockHoldMs", 800)), notify=changed)
 
     @Slot(str, str, result=str)
     def color(self, name: str, fallback: str = "accent") -> str:

@@ -734,6 +734,9 @@ class MainWindow(QMainWindow):
             self.start_btn.click()
         elif action == "action:dsp_toggle":
             self._toggle_dsp()
+        elif action == "action:ui_lock":
+            self.session.toggleLock()
+            self.statusBar().showMessage("Blokada LIVE: " + ("włączona" if self.session.locked else "wyłączona"), 2000)
         elif action.startswith("action:siren_mem:"):
             i = int(action.rsplit(":", 1)[1])
             self._siren_mem = i

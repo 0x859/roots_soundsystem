@@ -63,8 +63,11 @@ Item {
                                 else if (root.isChoice) menu.open()
                                 else if (root.param.kind === "bool") root.param.toggle()
                             }
-                            onDoubleClicked: if (modelData === 0 && !root.isChoice) root.param.reset()
-                            onWheel: (w) => root.param.step(w.angleDelta.y > 0 ? 1 : -1)
+                            onDoubleClicked: if (modelData === 0 && !root.isChoice && !Session.locked) root.param.reset()
+                            onWheel: (w) => {
+                                if (Session.locked) { w.accepted = false; return }
+                                root.param.step(w.angleDelta.y > 0 ? 1 : -1)
+                            }
                         }
                     }
                 }

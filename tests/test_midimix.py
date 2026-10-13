@@ -43,7 +43,8 @@ def test_profile_targets_exist(store):
         for mid, target in layer.items():
             assert target in store.specs or target in ACTIONS, f"{mid} -> {target}"
     assert len(p.mapping) == 24 + 9 + 16 + 2
-    assert len(p.shift_mapping) == 24 + 8 + 4  # gałki, rząd Mute przy SOLO, Rec Arm 1-3 i 6
+    assert len(p.shift_mapping) == 24 + 8 + 5  # gałki, rząd Mute przy SOLO, Rec Arm 1-3, 6 i 7
+    assert p.shift_mapping["note:0:21"] == "action:ui_lock"  # SOLO + Rec Arm 7 = blokada LIVE
     assert len(p.feedback) == 16
 
 

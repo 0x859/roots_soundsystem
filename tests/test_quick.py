@@ -291,6 +291,31 @@ def test_session_devices_and_pickup(app):
     assert s.property("devices")["music"] == "CABLE"
 
 
+def test_session_lock(app):
+    from ui.quick import QmlSession
+
+    s = QmlSession()
+    toasts, changes = [], []
+    s.toast.connect(toasts.append)
+    s.lockedChanged.connect(lambda: changes.append(s.property("locked")))
+    assert s.property("locked") is False
+    s.toggleLock()
+    s.setProperty("locked", True)  # bez zmiany – bez sygnału
+    s.toggleLock()
+    assert changes == [True, False] and len(toasts) == 2
+    s.hint("przytrzymaj")
+    assert toasts[-1] == "przytrzymaj"
+
+
+def test_theme_lock_hold(store):
+    prof = lp.default_profile()
+    assert prof["theme"]["lockHoldMs"] == 800
+    del prof["theme"]["lockHoldMs"]  # profil sprzed blokady
+    assert lp.normalize(prof, store.specs)["theme"]["lockHoldMs"] == 800
+    prof["theme"]["lockHoldMs"] = 99999
+    assert lp.normalize(prof, store.specs)["theme"]["lockHoldMs"] == 3000
+
+
 def test_plots_curves(app, store):
     from dsp.graph import SignalChain
     from ui.quick import QmlPlots
@@ -407,6 +432,112 @@ def test_all_params_view_runs_without_warnings(app, desk, store):
     finally:
         qInstallMessageHandler(None)
     assert not [m for m in msgs if "qml" in m.lower() or "error" in m.lower() or "undefined" in m.lower()], msgs
+
+
+def _visible_knob(desk):
+    """Pierwsza widoczna gałka (mieszcząca się w oknie) i środek jej tarczy we współrzędnych sceny."""
+    from PySide6.QtCore import QPointF
+
+    def items(item):  # elementy z Repeaterów nie są dziećmi QObject – drzewo wizualne
+        for child in item.childItems():
+            yield child
+            yield from items(child)
+
+    for it in items(desk.rootObject()):
+        if it.property("dial") is None or it.property("param") is None or not it.isVisible():
+            continue
+        dial = it.property("dial")
+        p = it.mapToScene(QPointF(it.width() / 2, dial / 2))
+        if 0 < p.x() < desk.width() and 0 < p.y() < desk.height() - 150:
+            return it.property("param").property("key"), p
+    raise AssertionError("brak widocznej gałki")
+
+
+def _send_mouse(win, kind, pos):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QMouseEvent
+
+    buttons = Qt.NoButton if kind == QMouseEvent.Type.MouseButtonRelease else Qt.LeftButton
+    QApplication.sendEvent(win, QMouseEvent(kind, pos, pos, Qt.LeftButton, buttons, Qt.NoModifier))
+
+
+def test_live_lock_blocks_wheel_and_double_click(app, desk, store):
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QWheelEvent
+
+    desk.session.setProperty("screen", "live")
+    _settle(app, 6)
+    key, pos = _visible_knob(desk)
+    win = desk.quickWindow()
+    spec = store.specs[key]
+
+    def wheel():
+        QApplication.sendEvent(win, QWheelEvent(pos, pos, QPoint(), QPoint(0, 120), Qt.NoButton, Qt.NoModifier,
+                                                Qt.NoScrollPhase, False))
+        _pump(app)
+
+    def double_click():
+        for kind in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseButtonPress,
+                     QEvent.MouseButtonDblClick, QEvent.MouseButtonRelease):
+            _send_mouse(win, kind, pos)
+        _pump(app)
+
+    store.reset([key])
+    desk.session.setProperty("locked", True)
+    _pump(app)
+    wheel()
+    assert store[key] == spec.default  # kółko nie zmienia wartości w blokadzie
+    desk.session.setProperty("locked", False)
+    _pump(app)
+    wheel()
+    changed = store[key]
+    assert changed != spec.default  # bez blokady kółko działa (test sprawdza się sam)
+    desk.session.setProperty("locked", True)
+    _pump(app)
+    double_click()
+    assert store[key] == changed  # dwuklik nie przywraca domyślnej
+    desk.session.setProperty("locked", False)
+    _pump(app)
+    double_click()
+    assert store[key] == spec.default
+
+
+def test_live_lock_stop_needs_hold(app, desk):
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtQuick import QQuickItem
+    from PySide6.QtTest import QTest
+
+    session = desk.session
+    got, toasts = [], []
+    session.requested.connect(lambda a, _arg: got.append(a))
+    session.toast.connect(toasts.append)
+    session.set_running(True)
+    _settle(app, 4)
+    win = desk.quickWindow()
+
+    def press(name, hold_ms=0):
+        item = desk.rootObject().findChild(QQuickItem, name)
+        pos = item.mapToScene(QPointF(item.width() / 2, item.height() / 2))
+        _send_mouse(win, QEvent.MouseButtonPress, pos)
+        if hold_ms:
+            QTest.qWait(hold_ms)
+        _pump(app)
+        _send_mouse(win, QEvent.MouseButtonRelease, pos)
+        _pump(app)
+
+    press("runHold")
+    assert got == ["start_stop"]  # bez blokady STOP działa od razu
+    press("lockButton")
+    assert session.property("locked") is True
+    hold = desk.layout.theme.property("lockHoldMs")
+    press("runHold")
+    assert got == ["start_stop"] and "przytrzymaj" in toasts[-1].lower()  # krótki klik – tylko podpowiedź
+    press("runHold", hold + 300)
+    assert got == ["start_stop", "start_stop"]
+    press("lockButton")
+    assert session.property("locked") is True  # odblokowanie też wymaga przytrzymania
+    press("lockButton", hold + 300)
+    assert session.property("locked") is False
 
 
 def test_theme_fits_viewport(app):
@@ -743,6 +874,10 @@ def test_window_qml_requests(qml_window):
     win._on_qml_request("action", "action:siren_mem:2")
     assert store["siren.pitch"] == pytest.approx(777.0)
     assert win.session.hasMemory(2) and not win.session.hasMemory(3)
+    win._on_qml_request("action", "action:ui_lock")  # pad / skrót / MIDImix (SOLO + Rec Arm 7)
+    assert win.session.property("locked") is True
+    win._on_midi_action("action:ui_lock")
+    assert win.session.property("locked") is False
     win._on_qml_request("classic", None)
     assert win.view == "classic"
 

@@ -12,6 +12,9 @@ Rectangle {
 
     readonly property var param: target !== "" ? Params.get(target) : null
     readonly property bool isAction: target.indexOf("action:") === 0
+    // blokada LIVE: akcje, które zatrzymują lub przestawiają cały tor, dopiero po przytrzymaniu
+    readonly property bool guarded: Session.locked && (target === "action:dsp_toggle" || target === "action:ui_lock"
+                                                       || (target === "action:start_stop" && Session.running))
     readonly property bool active: param ? param.on : flash
     readonly property real s: Theme.scale
     property bool latched: false
@@ -90,5 +93,12 @@ Rectangle {
         }
         onReleased: (m) => { if (m.button === Qt.LeftButton || root.isAction) root.release() }
         onCanceled: root.release()
+    }
+
+    HoldArea {
+        anchors.fill: parent
+        visible: root.interactive && root.guarded
+        hold: true
+        onActivated: Session.requestWith("action", root.target)
     }
 }

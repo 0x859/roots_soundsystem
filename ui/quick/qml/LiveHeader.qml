@@ -35,9 +35,12 @@ Rectangle {
                 font.pixelSize: Math.round(20 * root.s)
                 font.letterSpacing: 2.4
             }
-            MouseArea {
+            HoldArea {
+                objectName: "runHold"
                 anchors.fill: parent
-                onClicked: Session.request("start_stop")
+                hold: Session.locked && Session.running
+                hint: "BLOKADA LIVE – przytrzymaj STOP"
+                onActivated: Session.request("start_stop")
             }
         }
 
@@ -261,9 +264,11 @@ Rectangle {
                         font.letterSpacing: 1.2
                     }
                 }
-                MouseArea {
+                HoldArea {
                     anchors.fill: parent
-                    onClicked: Session.request("midi_map")
+                    hold: Session.locked
+                    hint: "BLOKADA LIVE – przytrzymaj, aby otworzyć mapę MIDI"
+                    onActivated: Session.request("midi_map")
                 }
             }
         }
@@ -291,9 +296,11 @@ Rectangle {
                     font.pixelSize: Math.round(15 * root.s)
                     font.letterSpacing: 1.2
                 }
-                MouseArea {
+                HoldArea {
                     anchors.fill: parent
-                    onClicked: Session.requestWith("action", "action:dsp_toggle")
+                    hold: Session.locked
+                    hint: "BLOKADA LIVE – przytrzymaj, aby przełączyć wszystkie moduły DSP"
+                    onActivated: Session.requestWith("action", "action:dsp_toggle")
                 }
             }
         }
@@ -303,6 +310,8 @@ Rectangle {
             accentCurrent: true
             model: [{ label: "LIVE", value: "live" }, { label: "KONFIGURACJA", value: "config" }]
             current: Session.screen
+            holdValues: Session.locked ? ["config"] : []
+            hint: "BLOKADA LIVE – przytrzymaj KONFIGURACJĘ"
             onPicked: (v) => Session.screen = v
         }
 
@@ -324,7 +333,19 @@ Rectangle {
             FlatButton {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "✎ UKŁAD"
+                hold: Session.locked
+                hint: "BLOKADA LIVE – przytrzymaj, aby edytować układ"
                 onClicked: Session.editing = true
+            }
+            // włączenie jednym kliknięciem, wyłączenie przytrzymaniem
+            FlatButton {
+                objectName: "lockButton"
+                anchors.verticalCenter: parent.verticalCenter
+                text: Session.locked ? "ZABLOKOWANE" : "BLOKADA"
+                checked: Session.locked
+                hold: Session.locked
+                hint: "Przytrzymaj, aby odblokować"
+                onClicked: Session.toggleLock()
             }
         }
     }

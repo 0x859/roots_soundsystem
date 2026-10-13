@@ -43,6 +43,7 @@ ACTIONS = {
     "action:scene_next": "SCENA ›",
     "action:start_stop": "START / STOP",
     "action:dsp_toggle": "DSP: WSZYSTKO ON/OFF",
+    "action:ui_lock": "BLOKADA LIVE",
     "action:siren_mem:0": "SYRENA M1",
     "action:siren_mem:1": "SYRENA M2",
     "action:siren_mem:2": "SYRENA M3",
@@ -107,6 +108,7 @@ DEFAULT_THEME: dict[str, Any] = {
     "inspectorWidth": 360,
     "autoScale": True,  # skala dopasowana do rozmiaru okna (mnożnik skali użytkownika)
     "autoExpand": True,  # karty same pokazują kontrolki spod „WIĘCEJ”, gdy mieszczą się bez przewijania
+    "lockHoldMs": 800,  # blokada LIVE: tyle trzeba przytrzymać STOP, KONFIGURACJĘ, ✎ UKŁAD, DSP
 }
 
 
@@ -453,6 +455,7 @@ def _theme_norm(raw: Any) -> dict[str, Any]:
     base["autoScale"] = raw.get("autoScale") is not False
     base["autoExpand"] = raw.get("autoExpand") is not False
     base["inspectorWidth"] = int(_num(raw.get("inspectorWidth"), 280, 640, 360))
+    base["lockHoldMs"] = int(_num(raw.get("lockHoldMs"), 300, 3000, 800))
     pads = raw.get("pads")
     if isinstance(pads, dict):
         base["pads"]["position"] = _pick(pads.get("position"), PAD_POSITIONS, "bottom")

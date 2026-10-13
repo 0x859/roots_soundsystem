@@ -176,7 +176,8 @@ Rectangle {
                 MouseArea {
                     id: titleArea
                     anchors.fill: parent
-                    enabled: !card.editing
+                    // zwinięcie zapisuje profil i przebudowuje wszystkie karty – w blokadzie LIVE wyłączone
+                    enabled: !card.editing && !Session.locked
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: card.host.toggleCollapsed(card.ci)

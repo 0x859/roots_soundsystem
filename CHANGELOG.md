@@ -12,6 +12,7 @@ MINOR odpowiada etapowi planu (`docs/PLAN.md`), PATCH – poprawkom w jego obrę
   - FX PANIC (`out.fx_panic`, karta WYJŚCIE, skrót `P`): wycisza i czyści echo i sprężynę, przytrzymany trzyma je wyciszone; ostrzeżenie „ECHO ↑ PANIC” w nagłówku LIVE, gdy echo się rozkręca;
   - THROW MIC (`mic.throw`, skrót `V`): chwilowo cały mikrofon do echa; SWELL (`echo.swell`, skrót `W`): przytrzymanie podnosi sprzężenie do samooscylacji;
   - MIDImix: SOLO + Rec Arm 1/2/3/6 = FX PANIC, THROW MIC, SWELL, MONO.
+- **BLOKADA LIVE** (przycisk w nagłówku, akcja `action:ui_lock`, MIDImix: SOLO + Rec Arm 7): kółko myszy nie zmienia wartości kontrolek (przewija ekran), dwuklik nie przywraca domyślnej, tytuły kart się nie zwijają; STOP, KONFIGURACJA, ✎ UKŁAD, DSP n/8 i MIDI w nagłówku (oraz pady START/STOP, DSP i BLOKADA) wymagają przytrzymania. Pady, skróty, kontroler i FX PANIC bez zmian. Czas przytrzymania w motywie (`lockHoldMs`, domyślnie 800 ms).
 - Animacja powitalna diod kontrolera po podłączeniu (start z podpiętym MIDImix, podpięcie w trakcie, wybór portu): fala przez przyciski MUTE/REC ARM od lewej i błysk (~1,2 s), potem diody wracają do stanu parametrów. Sterowanie działa w trakcie animacji. Wyłączana przyciskiem **POWITANIE** na karcie MIDI – KONTROLER albo w menu MIDI (ustawienie `midi/intro`, domyślnie włączona); włączenie od razu ją pokazuje.
 
 ### Zmienione

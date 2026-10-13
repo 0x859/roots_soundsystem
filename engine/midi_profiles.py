@@ -20,6 +20,7 @@ ACTIONS = {
     "action:siren_mem:3": "Pamięć syreny M4",
     "action:start_stop": "Start / stop",
     "action:dsp_toggle": "DSP: wszystko wył. / przywróć",
+    "action:ui_lock": "Blokada interfejsu LIVE",
 }
 
 
@@ -109,8 +110,9 @@ def _midimix() -> MidiProfile:
         "echo.throw", "siren.trigger", "spring.crash", "action:tap",
         "mic.talkover", "preamp.cut", "action:siren_mem_next", "out.mute",
     ]
-    # SOLO + Rec Arm (bez wpisu = jak bez SOLO): gesty dubowe i MONO przeniesione spod Rec Arm 6
-    shift_recs = {0: "out.fx_panic", 1: "mic.throw", 2: "echo.swell", 5: "preamp.mono"}
+    # SOLO + Rec Arm (bez wpisu = jak bez SOLO): gesty dubowe, MONO przeniesione spod Rec Arm 6 i blokada
+    # LIVE na Rec Arm 7 (bez SOLO to tylko następna pamięć syreny – pomyłka nie wycisza toru)
+    shift_recs = {0: "out.fx_panic", 1: "mic.throw", 2: "echo.swell", 5: "preamp.mono", 6: "action:ui_lock"}
     mapping: dict[str, str] = {}
     shift_mapping: dict[str, str] = {}
     for ccs, keys, skeys in zip(_MIX_KNOBS, knobs, shift_knobs, strict=True):

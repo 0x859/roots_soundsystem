@@ -8,6 +8,8 @@ Rectangle {
     property bool accentCurrent: false
     property bool fill: false
     property real fontSize: 15
+    property var holdValues: []  // wartości wybierane dopiero po przytrzymaniu (blokada LIVE)
+    property string hint: "BLOKADA LIVE – przytrzymaj, aby przełączyć"
     signal picked(var value)
 
     readonly property real s: Theme.scale
@@ -42,9 +44,11 @@ Rectangle {
                     font.pixelSize: Math.round(root.fontSize * root.s)
                     font.letterSpacing: root.fill ? 0.4 : 1.2
                 }
-                MouseArea {
+                HoldArea {
                     anchors.fill: parent
-                    onClicked: root.picked(modelData.value)
+                    hold: !on && root.holdValues.indexOf(modelData.value) >= 0
+                    hint: root.hint
+                    onActivated: root.picked(modelData.value)
                 }
             }
         }
