@@ -1087,3 +1087,102 @@ def test_window_close_without_qml_errors(app, tmp_path, monkeypatch, close_first
         qInstallMessageHandler(None)
     bad = [m for m in msgs if "TypeError" in m or "of null" in m]
     assert bad == []
+
+
+# --- gotowe układy (szablony) ---
+def _main_flick(root):
+    """Flickable siatki kart: największy widoczny Flickable sceny (karty mają własne, mniejsze)."""
+    from PySide6.QtQuick import QQuickItem
+
+    flicks = [it for it in root.findChildren(QQuickItem)
+              if it.metaObject().className().startswith("QQuickFlickable") and it.isVisible()]
+    return max(flicks, key=lambda it: it.width() * it.height())
+
+
+def test_layout_templates_switch_and_reset(app, layout, appdata):
+    assert layout.templates == list(lp.TEMPLATES)
+    assert layout.profiles[: len(lp.TEMPLATES)] == list(lp.TEMPLATES)
+    assert layout.isTemplate and layout.templateInfo(lp.COMPACT_NAME) and layout.templateInfo("Plener") == ""
+    layout.switchProfile(lp.COMPACT_NAME)
+    compact = lp.normalize(lp.template_profile(lp.COMPACT_NAME), layout.specs)
+    assert layout.profileName == lp.COMPACT_NAME and layout.cards == compact["cards"]
+    assert layout.theme.property("density") == "compact"
+    # edycja szablonu zapisuje się pod jego nazwą; usunąć się go nie da, RESET wraca do szablonu (z cofaniem)
+    layout.removeCard(0)
+    layout.flush()
+    assert (appdata / "RootsSoundsystem" / "layouts" / f"{lp.COMPACT_NAME}.json").is_file()
+    layout.deleteProfile()
+    assert layout.profileName == lp.COMPACT_NAME and len(layout.cards) == len(compact["cards"]) - 1
+    layout.resetProfile()
+    assert layout.cards == compact["cards"]
+    layout.undo()
+    assert len(layout.cards) == len(compact["cards"]) - 1
+    layout.switchProfile(lp.COMPACT_FX_NAME)
+    assert layout.cards == lp.normalize(lp.template_profile(lp.COMPACT_FX_NAME), layout.specs)["cards"]
+    layout.switchProfile(lp.COMPACT_NAME)  # zapisana, zmieniona kopia
+    assert len(layout.cards) == len(compact["cards"]) - 1
+    # powrót do domyślnego; zwykły profil po RESET dostaje układ domyślny
+    layout.switchProfile(lp.DEFAULT_NAME)
+    assert layout.cards == lp.normalize(lp.default_profile(), layout.specs)["cards"]
+    assert layout.saveAs("Plener") and not layout.isTemplate
+    layout.switchProfile(lp.COMPACT_FX_NAME)
+    layout.saveAs("Plener 2")
+    layout.resetProfile()
+    assert layout.cards == lp.normalize(lp.default_profile(), layout.specs)["cards"]
+
+
+# zmaksymalizowane okno na ekranie 1366×768 (pasek zadań, tytuł, menu i pasek stanu) ≈ 1366×646 na QML
+@pytest.mark.parametrize("size", [(1366, 768), (1280, 720), (1366, 646)])
+@pytest.mark.parametrize("name", [lp.COMPACT_NAME, lp.COMPACT_FX_NAME])
+def test_compact_templates_fit_live_without_scrolling(app, desk, layout, name, size):
+    layout.switchProfile(name)
+    # bez automatycznego „WIĘCEJ”: sprawdzamy sam układ szablonu (zwinięte karty)
+    layout.setTheme("autoExpand", False)
+    desk.session.setProperty("screen", "live")
+    desk.resize(*size)
+    _settle(app)
+    root = desk.rootObject()
+    flick = _main_flick(root)
+    assert flick.property("contentHeight") <= flick.height(), (name, size)
+    shown = [root.cardItem(ci) for ci in range(len(layout.cards))]
+    shown = [it for it in shown if it is not None and it.isVisible()]
+    assert shown and all(it.y() + it.height() <= flick.height() for it in shown)
+
+
+def test_templates_qml_without_warnings(app, desk, layout):
+    msgs = []
+    qInstallMessageHandler(lambda _mode, _ctx, msg: msgs.append(msg))
+    try:
+        assert desk.ok, desk.error_text()
+        desk.resize(1366, 768)
+        for name in (lp.COMPACT_NAME, lp.COMPACT_FX_NAME, lp.DEFAULT_NAME):
+            layout.switchProfile(name)
+            for screen in ("live", "config"):
+                desk.session.setProperty("screen", screen)
+                _settle(app, 4)
+            desk.session.setProperty("editing", True)
+            _pump(app)
+            desk.session.setProperty("editing", False)
+            _pump(app)
+        assert layout.profileName == lp.DEFAULT_NAME
+    finally:
+        qInstallMessageHandler(None)
+    bad = [m for m in msgs if "qml" in m.lower() or "TypeError" in m or "ReferenceError" in m]
+    assert bad == []
+
+
+def test_window_layout_menu(qml_window, app):
+    win = qml_window
+    win._populate_layout_menu()
+    acts = [a for a in win.m_layout.actions() if a.isCheckable()]
+    assert [a.text().split(" – ")[0] for a in acts[:2]] == [lp.DEFAULT_NAME, lp.COMPACT_NAME]
+    assert [a.isChecked() for a in acts] == [a.text().startswith(lp.DEFAULT_NAME + " – ") for a in acts]
+    fx = next(a for a in acts if a.text().startswith(lp.COMPACT_FX_NAME))
+    win.set_view("classic")
+    fx.trigger()
+    app.processEvents()
+    assert win.layout_model.profileName == lp.COMPACT_FX_NAME and win.view == "qml"
+    assert win.settings.value("ui/layout_profile") == lp.COMPACT_FX_NAME
+    win._populate_layout_menu()
+    checked = [a.text() for a in win.m_layout.actions() if a.isChecked()]
+    assert len(checked) == 1 and checked[0].startswith(lp.COMPACT_FX_NAME)

@@ -36,26 +36,56 @@ Rectangle {
             Popup {
                 id: profilePopup
                 y: parent.height + 6
-                width: 280 * root.s
+                width: 340 * root.s
                 padding: 6
                 background: Rectangle { color: Theme.raised; border.color: Theme.line; radius: 8 * root.s }
                 contentItem: Column {
                     spacing: 4
                     Repeater {
                         model: Profile.profiles
+                        // gotowe układy (szablony) z opisem i znacznikiem; wybór wczytuje zapisaną kopię lub szablon
                         delegate: Rectangle {
                             required property string modelData
+                            readonly property string info: Profile.templateInfo(modelData)
                             width: profilePopup.width - 12
-                            height: 34 * root.s
+                            height: (info !== "" ? 46 : 34) * root.s
                             radius: 6 * root.s
                             color: ph.containsMouse ? Theme.line : "transparent"
-                            Text {
+                            Column {
                                 anchors.verticalCenter: parent.verticalCenter
                                 x: 10 * root.s
-                                text: modelData
-                                color: modelData === Profile.profileName ? Theme.accent : Theme.text
-                                font.family: Theme.valueFont
-                                font.pixelSize: Math.round(13 * root.s)
+                                width: parent.width - 20 * root.s - tag.width
+                                spacing: 2
+                                Text {
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                    text: modelData
+                                    color: modelData === Profile.profileName ? Theme.accent : Theme.text
+                                    font.family: Theme.valueFont
+                                    font.pixelSize: Math.round(13 * root.s)
+                                }
+                                Text {
+                                    visible: text !== ""
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                    text: info
+                                    color: Theme.muted
+                                    font.family: Theme.valueFont
+                                    font.pixelSize: Math.round(10 * root.s)
+                                }
+                            }
+                            Text {
+                                id: tag
+                                visible: info !== ""
+                                anchors.right: parent.right
+                                anchors.rightMargin: 8 * root.s
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "SZABLON"
+                                color: Theme.fx
+                                font.family: Theme.labelFont
+                                font.weight: Font.DemiBold
+                                font.pixelSize: Math.round(10 * root.s)
+                                font.letterSpacing: 1
                             }
                             MouseArea {
                                 id: ph
@@ -88,7 +118,18 @@ Rectangle {
                             onClicked: { if (Profile.saveAs(newName.text)) { newName.text = ""; profilePopup.close() } }
                         }
                     }
+                    // wbudowanego układu nie da się usunąć – RESET przywraca jego szablon
+                    Text {
+                        visible: Profile.isTemplate
+                        width: profilePopup.width - 12
+                        wrapMode: Text.WordWrap
+                        text: "Gotowy układ – zmiany zapisują się w nim, RESET przywraca szablon."
+                        color: Theme.muted
+                        font.family: Theme.valueFont
+                        font.pixelSize: Math.round(11 * root.s)
+                    }
                     FlatButton {
+                        visible: !Profile.isTemplate
                         width: profilePopup.width - 12
                         height: 34 * root.s
                         fontSize: 13

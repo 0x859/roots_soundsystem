@@ -102,7 +102,7 @@ def test_shortcut_names():
 
 
 def test_save_load_list_delete(store, appdata):
-    assert lp.list_profiles() == [lp.DEFAULT_NAME]
+    assert lp.list_profiles() == list(lp.TEMPLATES)  # gotowe układy są zawsze na liście
     prof = lp.normalize(lp.default_profile(), store.specs)
     prof["name"] = "Sesja: plener"
     prof["theme"]["scale"] = 1.25
@@ -207,3 +207,65 @@ def test_card_height(store):
     raw = {"cards": [{"title": "A", "height": 300}, {"title": "B", "height": 99999}, {"title": "C", "height": "x"}]}
     prof = lp.normalize(raw, store.specs)
     assert [c["height"] for c in prof["cards"]] == [300, lp.MAX_HEIGHT, 0]
+
+
+# --- gotowe układy (szablony) ---
+LIVE_MUST_HAVE = ("out.master", "out.mute", "out.fx_panic", "echo.feedback", "echo.time", "spring.decay",
+                  "siren.pitch", "mic.level", "mic.talkover", "preamp.hp", "preamp.lp")
+
+
+@pytest.mark.parametrize("name", list(lp.TEMPLATES))
+def test_templates_normalize_without_loss(store, name):
+    raw = lp.template_profile(name)
+    prof = lp.normalize(raw, store.specs)
+    assert prof["name"] == name
+    assert lp.normalize(prof, store.specs) == prof  # stabilny po zapisie i wczytaniu
+    # żadna kontrolka, pad ani skrót nie wypada przy walidacji (tylko istniejące cele i typy)
+    assert [len(c["controls"]) for c in prof["cards"]] == [len(c["controls"]) for c in raw["cards"]]
+    for rc, nc in zip(raw["cards"], prof["cards"], strict=True):
+        assert [c["param"] for c in nc["controls"]] == [c["param"] for c in rc["controls"]]
+        assert [c["type"] for c in nc["controls"]] == [c["type"] for c in rc["controls"]]
+        assert [c["size"] for c in nc["controls"]] == [c["size"] for c in rc["controls"]]
+        for key in ("span", "cols", "more", "toggle", "info", "visible"):
+            assert nc[key] == rc[key], (rc["title"], key)
+    assert len(prof["pads"]) == len(raw["pads"]) and len(prof["shortcuts"]) == len(raw["shortcuts"])
+    assert prof["theme"] == lp.normalize({"theme": raw["theme"]}, store.specs)["theme"]
+    assert len({c["id"] for c in prof["cards"]}) == len(prof["cards"])
+
+
+@pytest.mark.parametrize("name", [lp.COMPACT_NAME, lp.COMPACT_FX_NAME])
+def test_compact_templates_keep_live_functions(store, name):
+    prof = lp.normalize(lp.template_profile(name), store.specs)
+    default = lp.normalize(lp.default_profile(), store.specs)
+    live = [c for c in prof["cards"] if c["visible"] in ("live", "both")]
+    targets = {x["param"] for c in live for x in c["controls"]}
+    kills = {x.get("kill") for c in live for x in c["controls"]}
+    assert set(LIVE_MUST_HAVE) <= targets
+    assert {f"iso.kill.{b}" for b in ("sub", "bass", "lowmid", "highmid", "top")} <= kills  # kill izolatora
+    assert prof["pads"] == default["pads"] and prof["shortcuts"] == default["shortcuts"]
+    # kompaktowy: mniej kart LIVE niż domyślny (efekty w jednej karcie); KONFIGURACJA bez zmian w obu
+    if name == lp.COMPACT_NAME:
+        assert len(live) < len([c for c in default["cards"] if c["visible"] == "live"])
+    assert [c for c in prof["cards"] if c["visible"] == "config"] == [c for c in default["cards"] if c["visible"] == "config"]
+    theme = prof["theme"]
+    assert theme["density"] == "compact" and theme["scale"] < 1.0
+    assert theme["minCardWidth"] < lp.DEFAULT_THEME["minCardWidth"]
+    assert theme["pads"]["height"] < lp.DEFAULT_THEME["pads"]["height"]
+
+
+def test_templates_files(store, appdata):
+    """Szablon bez pliku = świeży szablon; zapisana kopia ma pierwszeństwo, po usunięciu wraca szablon."""
+    fresh = lp.load_profile(lp.COMPACT_NAME, store.specs)
+    assert fresh == lp.normalize(lp.template_profile(lp.COMPACT_NAME), store.specs)
+    assert lp.is_template(lp.COMPACT_FX_NAME) and not lp.is_template("Plener")
+    edited = dict(fresh, cards=fresh["cards"][:3])
+    lp.save_profile(edited)
+    assert lp.list_profiles() == list(lp.TEMPLATES)  # bez duplikatu zapisanego szablonu
+    assert len(lp.load_profile(lp.COMPACT_NAME, store.specs)["cards"]) == 3
+    lp.delete_profile(lp.COMPACT_NAME)
+    assert lp.load_profile(lp.COMPACT_NAME, store.specs) == fresh
+    # nowy profil bez pliku i zepsuty plik szablonu – układ domyślny / szablon
+    assert lp.load_profile("Nowy", store.specs)["cards"] == lp.normalize(lp.default_profile(), store.specs)["cards"]
+    (lp.layouts_dir() / f"{lp.COMPACT_FX_NAME}.json").write_text("{ zepsuty", encoding="utf-8")
+    assert lp.load_profile(lp.COMPACT_FX_NAME, store.specs)["cards"] == lp.normalize(
+        lp.template_profile(lp.COMPACT_FX_NAME), store.specs)["cards"]

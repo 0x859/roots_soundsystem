@@ -103,7 +103,8 @@ Domyślnie aplikacja otwiera nowy interfejs: ciemny stół z kartami (złoto = t
   - **PADY**: zawartość i kolejność paska padów, położenie (dół/góra/ukryty), wysokość;
   - **MOTYW**: skala 80–160%, dopasowanie do okna (skala auto, samoczynne rozwijanie kart), gęstość, styl gałek, ramki kontrolek w trybie gry, minimalna szerokość karty, czas przytrzymania w blokadzie LIVE, HUD gestu MIDI (włączony/wyłączony, miejsce: góra/środek/dół, czas 0,5–5 s), ściąga SHIFT, kolory, czcionki;
   - wyszukiwarka u dołu dodaje parametr do zaznaczonej karty (albo pad);
-  - COFNIJ/PONÓW, profile układu (ZAPISZ JAKO, przełączanie, usuwanie), IMPORT/EKSPORT JSON, RESET do układu domyślnego.
+  - COFNIJ/PONÓW, profile układu (ZAPISZ JAKO, przełączanie, usuwanie), IMPORT/EKSPORT JSON, RESET do układu domyślnego (w gotowym układzie – do jego szablonu).
+- **Gotowe układy** – menu *Widok → Układ* (także poza edycją) albo PROFIL w ✎ UKŁAD: **Domyślny** (pełny stół na duży ekran), **Kompaktowy** (laptop 1366×768 / 1280×720: cały LIVE bez przewijania, mniejsza skala i odstępy, niższe pady; echo, sprężyna i syrena w jednej karcie EFEKTY, rzadziej używane pod WIĘCEJ) i **Kompaktowy – efekty** (dub: większe echo, sprężyna, syrena, karta RZUTY I SENDY; preamp, izolator i mikrofon zwarte). Wszystkie mają kill izolatora, master/mute, FX PANIC i pasek padów, a KONFIGURACJA jest jak w domyślnym. Gotowego układu nie da się usunąć: zmiany zapisują się pod jego nazwą, a RESET przywraca szablon.
 - Profile układu to pliki JSON w `%APPDATA%\RootsSoundsystem\layouts\` (zapis automatyczny).
 - Czcionki: interfejs używa *Barlow Condensed* i *IBM Plex Mono*, jeśli są zainstalowane albo leżą w `assets/fonts/` (licencja OFL); w przeciwnym razie Bahnschrift i Consolas z Windows.
 

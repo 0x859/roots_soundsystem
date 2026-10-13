@@ -328,6 +328,8 @@ class MainWindow(QMainWindow):
             self.view_group.addAction(act)
             m_view.addAction(act)
         m_view.addSeparator()
+        self.m_layout = m_view.addMenu("Układ")
+        self.m_layout.aboutToShow.connect(self._populate_layout_menu)
         m_view.addAction("Edycja układu…", self._edit_layout)
 
         m_audio = mb.addMenu("&Audio")
@@ -350,6 +352,31 @@ class MainWindow(QMainWindow):
         m_help.addAction("Instalacja VB-Cable", self._show_vbcable_help)
         m_help.addSeparator()
         m_help.addAction("O programie", self._show_about)
+
+    def _populate_layout_menu(self) -> None:
+        """Gotowe układy (szablony) i zapisane profile; zaznaczony bieżący, wybór przełącza na QML."""
+        m = self.m_layout
+        m.clear()
+        lm = self.layout_model
+        current = lm.profile["name"]
+        saved = [n for n in lm.profiles if not layout_profile.is_template(n)]
+        m.addSection("Gotowe układy")
+        for name in (*layout_profile.TEMPLATES, None, *saved):
+            if name is None:
+                if saved:
+                    m.addSection("Moje profile")
+                continue
+            info = lm.templateInfo(name)
+            act = m.addAction(f"{name} – {info}" if info else name)
+            act.setCheckable(True)
+            act.setChecked(name == current)
+            act.triggered.connect(lambda _=False, n=name: self._choose_layout(n))
+
+    def _choose_layout(self, name: str) -> None:
+        self.layout_model.switchProfile(name)
+        self.settings.setValue("ui/layout_profile", name)
+        self.set_view("qml")
+        self.statusBar().showMessage(f"Układ: {name}", 3000)
 
     def _populate_midi_menu(self) -> None:
         m = self.m_midi

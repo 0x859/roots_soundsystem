@@ -185,6 +185,20 @@ class LayoutModel(QObject):
     def profiles(self) -> list[str]:
         return self._profiles
 
+    @Property("QVariantList", constant=True)
+    def templates(self) -> list[str]:
+        """Wbudowane układy (zawsze na liście profili, nie do skasowania)."""
+        return list(lp.TEMPLATES)
+
+    @Property(bool, notify=profilesChanged)
+    def isTemplate(self) -> bool:
+        return lp.is_template(self._p["name"])
+
+    @Slot(str, result=str)
+    def templateInfo(self, name: str) -> str:
+        t = lp.TEMPLATES.get(name)
+        return t[1] if t else ""
+
     @Property(bool, notify=historyChanged)
     def canUndo(self) -> bool:
         return bool(self._undo)
@@ -509,6 +523,8 @@ class LayoutModel(QObject):
     @Slot()
     def deleteProfile(self) -> None:
         name = self._p["name"]
+        if lp.is_template(name):  # wbudowany układ zostaje; do szablonu wraca RESET
+            return
         self._save_timer.stop()
         lp.delete_profile(name)
         self._profiles = lp.list_profiles()
@@ -516,8 +532,8 @@ class LayoutModel(QObject):
 
     @Slot()
     def resetProfile(self) -> None:
-        """Przywraca układ domyślny w bieżącym profilu (z możliwością cofnięcia)."""
-        self._commit(lp.default_profile())
+        """Przywraca szablon bieżącego profilu (inne profile: układ domyślny), z możliwością cofnięcia."""
+        self._commit(lp.template_profile(self._p["name"]))
 
     @Slot(QUrl, result=bool)
     def exportTo(self, url: QUrl) -> bool:

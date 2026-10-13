@@ -313,6 +313,218 @@ def default_profile() -> dict[str, Any]:
     }
 
 
+# --- gotowe układy (szablony) ---
+COMPACT_NAME = "Kompaktowy"
+COMPACT_FX_NAME = "Kompaktowy – efekty"
+
+
+def _compact_theme(**extra: Any) -> dict[str, Any]:
+    """Motyw zwarty: mniejsza skala i odstępy, węższe karty, niższe pady (laptop 1366×768 / 1280×720)."""
+    theme = copy.deepcopy(DEFAULT_THEME)
+    theme.update({"scale": 0.9, "density": "compact", "minCardWidth": 196})
+    theme["pads"] = {"position": "bottom", "height": 46}
+    theme.update(extra)
+    return theme
+
+
+def _iso_compact() -> dict[str, Any]:
+    faders = [
+        _c(f"iso.g.{b}", "fader", "S", label=lab, kill=f"iso.kill.{b}")
+        for b, lab in (("sub", "SUB"), ("bass", "BASS"), ("lowmid", "L-MID"), ("highmid", "H-MID"), ("top", "TOP"))
+    ]
+    return _card("iso", "IZOLATOR", faders, toggle="iso.enabled", info="iso.slope")
+
+
+def _out_compact() -> dict[str, Any]:
+    return _card("out", "WYJŚCIE", [
+        _c("view:meters", "meter", "S"),
+        _c("out.master", "knob", "S"),
+        _c("out.mute", "button", "S", color="kill"),
+        _c("out.fx_panic", "button", "S", label="PANIC", color="kill"),
+    ], cols=3)
+
+
+def _from_default(cards: list[dict[str, Any]], name: str, theme: dict[str, Any]) -> dict[str, Any]:
+    """Profil z własnymi kartami LIVE; KONFIGURACJA, pady i skróty jak w układzie domyślnym."""
+    base = default_profile()
+    base["cards"] = cards + [c for c in base["cards"] if c["visible"] == "config"]
+    base["name"] = name
+    base["theme"] = theme
+    return base
+
+
+def compact_profile() -> dict[str, Any]:
+    """Kompaktowy: cały ekran LIVE bez przewijania na laptopie; echo, sprężyna i syrena w jednej karcie EFEKTY."""
+    cards = [
+        _card("preamp", "PREAMP", [
+            _c("preamp.hp", "knob", "S", label="HP"),
+            _c("preamp.lp", "knob", "S", label="LP"),
+            _c("preamp.drive", "knob", "S", color="kill"),
+            _c("preamp.echo_send", "knob", "S", label="Echo", color="fx"),
+            _c("preamp.spring_send", "knob", "S", label="Spring", color="fx"),
+            _c("preamp.bass", "knob", "S"),
+            _c("preamp.treble", "knob", "S"),
+            _c("preamp.gain", "knob", "S"),
+            _c("preamp.bias", "knob", "S", label="Asym."),
+            _c("preamp.res", "knob", "S", label="Rez."),
+            _c("preamp.master", "knob", "S", label="Master"),
+            _c("preamp.mono", "button", "S"),
+        ], more=5, toggle="preamp.enabled"),
+        _card("fx", "EFEKTY", [
+            _c("echo.time", "knob", "S", color="fx"),
+            _c("echo.feedback", "knob", "S", label="Sprzęż.", color="kill"),
+            _c("echo.return", "knob", "S", color="fx"),
+            _c("spring.decay", "knob", "S", label="Sprężyna", color="fx"),
+            _c("siren.pitch", "knob", "S", label="Syrena", color="fx"),
+            _c("siren.lfo_rate", "knob", "S", label="LFO", color="fx"),
+            _c("echo.enabled", "button", "S", label="ECHO", color="fx"),
+            _c("spring.enabled", "button", "S", label="SPRĘŻ.", color="fx"),
+            _c("echo.swell", "button", "S", label="SWELL", color="kill"),
+            _c("action:tap", "button", "S"),
+            # pod „WIĘCEJ”
+            _c("echo.sync", "value", "S"),
+            _c("echo.bpm", "knob", "S"),
+            _c("echo.lp", "knob", "S", label="LP"),
+            _c("echo.hp", "knob", "S", label="HP"),
+            _c("echo.wow", "knob", "S", label="Wow"),
+            _c("echo.drive", "knob", "S", label="Taśma"),
+            _c("echo.glide", "knob", "S", label="Bezwł."),
+            _c("spring.tone", "knob", "S", label="Ton spr."),
+            _c("spring.return", "knob", "S", label="Spr. mix"),
+            _c("siren.lfo_depth", "knob", "S", label="Głęb."),
+            _c("siren.sweep", "knob", "S"),
+            _c("siren.level", "knob", "S", label="Syr. dB"),
+            _c("siren.echo_send", "knob", "S", label="Syr.echo"),
+            _c("siren.wave", "value", "S"),
+            _c("siren.lfo_shape", "value", "S"),
+            _c("view:siren_memories", "meter", "M"),
+            _c("view:siren_presets", "meter", "M"),
+        ], color="fx", span=2, more=10, info="echo.sync"),
+        _iso_compact(),
+        _card("mic", "MIKROFON", [
+            _c("mic.level", "knob", "S"),
+            _c("mic.echo_send", "knob", "S", label="Echo", color="fx"),
+            _c("view:mic_meter", "meter", "S"),
+            _c("mic.talkover", "button", "S", label="TALK", color="fx"),
+            _c("mic.throw", "button", "S", label="THROW", color="fx"),
+            # pod „WIĘCEJ”
+            _c("mic.talkover_depth", "knob", "S", label="Talkover"),
+            _c("mic.gain", "knob", "S"),
+            _c("mic.gate", "knob", "S"),
+            _c("mic.hp", "button", "S"),
+            _c("mic.comp_thresh", "knob", "S", label="Próg"),
+            _c("mic.comp_ratio", "knob", "S"),
+            _c("mic.eq_low", "knob", "S"),
+            _c("mic.eq_mid", "knob", "S"),
+            _c("mic.eq_high", "knob", "S"),
+        ], more=5, toggle="mic.enabled"),
+        _out_compact(),
+    ]
+    return _from_default(cards, COMPACT_NAME, _compact_theme())
+
+
+def compact_fx_profile() -> dict[str, Any]:
+    """Kompaktowy – efekty (dub): większe echo, sprężyna, syrena i rzuty; preamp, izolator i mikrofon zwarte."""
+    cards = [
+        _card("echo", "ECHO", [
+            # siatka 5 kolumn: duże gałki pętli, tempo i LP w jednym rzędzie, niżej podział i przyciski
+            _c("echo.time", "knob", "L"),
+            _c("echo.feedback", "knob", "L", label="Sprzężenie", color="kill"),
+            _c("echo.return", "knob", "L"),
+            _c("echo.bpm", "knob", "S"),
+            _c("echo.lp", "knob", "S", label="LP"),
+            _c("echo.sync", "value", "S"),
+            _c("echo.swell", "button", "S", label="SWELL", color="kill"),
+            _c("action:tap", "button", "S"),
+            # pod „WIĘCEJ”
+            _c("echo.hp", "knob", "S", label="HP"),
+            _c("echo.wow", "knob", "S", label="Wow"),
+            _c("echo.drive", "knob", "S", label="Taśma"),
+            _c("echo.glide", "knob", "S", label="Bezwł."),
+        ], color="fx", span=2, cols=5, more=8, toggle="echo.enabled", info="echo.sync"),
+        _card("spring", "SPRĘŻYNA", [
+            _c("spring.decay", "knob", "M"),
+            _c("spring.tone", "knob", "S"),
+            _c("spring.return", "knob", "S"),
+            _c("spring.crash", "button", "S", label="CRASH", color="fx"),
+        ], color="fx", cols=3, toggle="spring.enabled"),
+        _card("siren", "SYRENA", [
+            _c("siren.pitch", "knob", "M", label="Pitch"),
+            _c("siren.lfo_rate", "knob", "M", label="LFO"),
+            _c("siren.lfo_depth", "knob", "M", label="Głęb."),
+            _c("view:siren_memories", "meter", "S"),
+            # pod „WIĘCEJ”
+            _c("siren.sweep", "knob", "S"),
+            _c("siren.level", "knob", "S"),
+            _c("view:siren_presets", "meter", "M"),
+            _c("siren.wave", "value", "S"),
+            _c("siren.lfo_shape", "value", "S"),
+            _c("siren.sweep_time", "knob", "S"),
+            _c("siren.release", "knob", "S"),
+            _c("siren.echo_send", "knob", "S", label="Do echa"),
+        ], color="fx", cols=3, more=4, info="siren.wave"),
+        # sendy muzyki i mikrofonu do efektów oraz rzuty (send syreny jest w karcie SYRENA pod „WIĘCEJ”)
+        _card("throws", "RZUTY I SENDY", [
+            _c("preamp.echo_send", "knob", "S", label="Echo", color="fx"),
+            _c("preamp.spring_send", "knob", "S", label="Spring", color="fx"),
+            _c("mic.echo_send", "knob", "S", label="Mic echo", color="fx"),
+            _c("echo.throw", "button", "S", label="THROW", color="fx"),
+            _c("mic.throw", "button", "S", label="MIC THR.", color="fx"),
+            _c("preamp.cut", "button", "S", label="DRY CUT", color="kill"),
+        ], color="fx", cols=3),
+        _card("preamp", "PREAMP", [
+            _c("preamp.hp", "knob", "S", label="HP"),
+            _c("preamp.lp", "knob", "S", label="LP"),
+            _c("preamp.drive", "knob", "S", color="kill"),
+            _c("preamp.bass", "knob", "S"),
+            _c("preamp.treble", "knob", "S"),
+            _c("preamp.gain", "knob", "S"),
+            _c("preamp.bias", "knob", "S", label="Asym."),
+            _c("preamp.res", "knob", "S", label="Rez."),
+            _c("preamp.master", "knob", "S", label="Master"),
+            _c("preamp.mono", "button", "S"),
+        ], span=2, more=6, toggle="preamp.enabled"),
+        _iso_compact(),
+        _card("mic", "MIKROFON", [
+            _c("mic.level", "knob", "S"),
+            _c("mic.talkover", "button", "S", label="TALK", color="fx"),
+            _c("view:mic_meter", "meter", "S"),
+            _c("mic.talkover_depth", "knob", "S", label="Talkover"),
+            _c("mic.gain", "knob", "S"),
+            _c("mic.gate", "knob", "S"),
+            _c("mic.hp", "button", "S"),
+            _c("mic.comp_thresh", "knob", "S", label="Próg"),
+            _c("mic.comp_ratio", "knob", "S"),
+            _c("mic.eq_low", "knob", "S"),
+            _c("mic.eq_mid", "knob", "S"),
+            _c("mic.eq_high", "knob", "S"),
+        ], cols=2, more=3, toggle="mic.enabled"),
+        _out_compact(),
+    ]
+    return _from_default(cards, COMPACT_FX_NAME, _compact_theme())
+
+
+# Wbudowane układy: nazwa → (fabryka, opis). Zawsze na liście profili i nie do skasowania; wybór
+# wczytuje zapisaną kopię użytkownika (jeśli jest) albo świeży szablon, a RESET wraca do szablonu.
+TEMPLATES: dict[str, tuple[Any, str]] = {
+    DEFAULT_NAME: (default_profile, "pełny stół (duży ekran)"),
+    COMPACT_NAME: (compact_profile, "laptop: LIVE bez przewijania, efekty razem"),
+    COMPACT_FX_NAME: (compact_fx_profile, "laptop, dub: większe echo, syrena i rzuty"),
+}
+
+
+def is_template(name: str) -> bool:
+    return name in TEMPLATES
+
+
+def template_profile(name: str) -> dict[str, Any]:
+    """Świeży szablon o tej nazwie (dla innych nazw – układ domyślny) z nazwą profilu `name`."""
+    factory = TEMPLATES.get(name, TEMPLATES[DEFAULT_NAME])[0]
+    prof = factory()
+    prof["name"] = name
+    return prof
+
+
 # --- walidacja ---
 def is_hold(spec: ParamSpec) -> bool:
     """Przełącznik aktywny tylko przy przytrzymaniu klawisza lub padu (kill, throw, syrena, crash)."""
@@ -580,22 +792,22 @@ def _safe(name: str) -> str:
 
 
 def list_profiles() -> list[str]:
-    names = sorted(p.stem for p in layouts_dir().glob("*.json"))
-    if DEFAULT_NAME not in names:
-        names.insert(0, DEFAULT_NAME)
-    return names
+    """Najpierw wbudowane układy (`TEMPLATES`, zawsze), potem zapisane profile użytkownika."""
+    saved = sorted(p.stem for p in layouts_dir().glob("*.json"))
+    return list(TEMPLATES) + [n for n in saved if n not in TEMPLATES]
 
 
 def load_profile(name: str, specs: dict[str, ParamSpec]) -> dict[str, Any]:
+    """Zapisany profil; bez pliku – szablon o tej nazwie (lub układ domyślny dla nowej nazwy)."""
     path = layouts_dir() / f"{_safe(name)}.json"
     if not path.is_file():
-        prof = normalize(default_profile(), specs)
+        prof = normalize(template_profile(name), specs)
         prof["name"] = name
         return prof
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        raw = default_profile()
+        raw = template_profile(name)
     prof = normalize(raw, specs)
     prof["name"] = name
     return prof
