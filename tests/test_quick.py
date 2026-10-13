@@ -1186,3 +1186,190 @@ def test_window_layout_menu(qml_window, app):
     win._populate_layout_menu()
     checked = [a.text() for a in win.m_layout.actions() if a.isChecked()]
     assert len(checked) == 1 and checked[0].startswith(lp.COMPACT_FX_NAME)
+
+
+# --- TOR SYGNAŁU („dlaczego cisza?”) ---
+def _item(root, name):
+    """Element o danym objectName w drzewie wizualnym (także delegaty Repeaterów, których nie widzi findChild)."""
+    stack = [root]
+    while stack:
+        it = stack.pop()
+        if it.objectName() == name:
+            return it
+        stack.extend(it.childItems())
+    return None
+
+
+def test_session_flow_emits_only_on_change(app, store):
+    from engine.signal_flow import analyze
+    from ui.quick import QmlSession
+
+    s = QmlSession()
+    hits = []
+    s.flowChanged.connect(lambda: hits.append(1))
+    assert s.property("silenceText") == "" and s.property("flow")["blocks"] == []
+    s.set_flow(analyze(store))
+    s.set_flow(analyze(store))  # te same dane – bez sygnału
+    assert len(hits) == 1 and s.property("silenceText") == ""
+    store.set("preamp.cut", True)
+    s.set_flow(analyze(store))
+    assert len(hits) == 2
+    assert s.property("silenceText") == "DRY CUT trzymany" and s.property("silenceTarget") == "preamp.cut"
+    store.set("echo.time", 0.5)  # zmiana bez wpływu na tor – bez sygnału
+    s.set_flow(analyze(store))
+    assert len(hits) == 2
+
+
+def test_signal_flow_view_and_silence_chip(app, desk, layout, store):
+    """Widok TOR SYGNAŁU na KONFIGURACJI, chip „⚠ CISZA” w nagłówku LIVE (także w blokadzie i przy wąskim
+    oknie), klik = przewinięcie do widoku albo karty przyczyny – bez ostrzeżeń QML."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtQuick import QQuickItem
+
+    from engine.signal_flow import analyze
+
+    msgs = []
+    qInstallMessageHandler(lambda _mode, _ctx, msg: msgs.append(msg))
+    try:
+        assert desk.ok, desk.error_text()
+        session = desk.session
+        root = desk.rootObject()
+        win = desk.quickWindow()
+        card = next(c for c in layout.cards if any(x["param"] == "view:signal_flow" for x in c["controls"]))
+        assert card["visible"] == "config"
+
+        def flow(**kw):
+            session.set_flow(analyze(store, **kw))
+            _pump(app)
+
+        chip = root.findChild(QQuickItem, "silenceChip")
+        assert chip is not None and not chip.isVisible()
+        store.set("preamp.cut", True)
+        flow()
+        assert not chip.isVisible()  # silnik zatrzymany – bez chipu (START i tak widać)
+        session.set_running(True)
+        flow()
+        _settle(app, 4)
+        assert chip.isVisible() and "DRY CUT trzymany (C)" in chip.property("text")
+        header = root.findChild(QQuickItem, "liveHeader")
+        assert chip.mapToItem(header, QPointF(chip.width(), 0)).x() <= header.width() + 0.5
+
+        # na LIVE nie ma karty z DRY CUT (tylko pad) ani widoku toru – toast z podpowiedzią
+        toasts = []
+        session.toast.connect(toasts.append)
+
+        def click(item):
+            pos = item.mapToScene(QPointF(item.width() / 2, item.height() / 2))
+            _send_mouse(win, QEvent.MouseButtonPress, pos)
+            _send_mouse(win, QEvent.MouseButtonRelease, pos)
+            _pump(app)
+
+        session.setProperty("locked", True)  # blokada: chip tylko przewija / podpowiada, bez przytrzymania
+        _pump(app)
+        click(chip)
+        assert session.property("screen") == "live"
+        assert toasts[-1].startswith("CISZA: DRY CUT trzymany – klawisz C")
+        session.setProperty("locked", False)
+
+        # przyczyna z kartą na LIVE: MUTE → karta WYJŚCIE
+        store.set_many({"preamp.cut": False, "out.mute": True})
+        flow()
+        assert "MUTE" in chip.property("text")
+        click(chip)
+        assert root.property("lastReveal") == "out.mute"
+
+        # wąskie okno: nagłówek się zawija, chip się mieści
+        desk.resize(700, 900)
+        _settle(app, 4)
+        assert chip.isVisible() and chip.mapToItem(header, QPointF(chip.width(), 0)).x() <= header.width() + 0.5
+        desk.resize(1280, 900)
+
+        # KONFIGURACJA: schemat bloków, klik w blok WYJŚCIE przełącza na LIVE i przewija do karty
+        session.setProperty("screen", "config")
+        _settle(app, 4)
+        click(chip)  # widok toru jest na ekranie – przewinięcie do niego
+        assert root.property("lastReveal") == "view:signal_flow"
+        out = _item(root, "flowBlock_out")
+        assert out is not None and out.isVisible()
+        click(out)
+        _settle(app, 4)
+        assert session.property("screen") == "live" and root.property("lastReveal") == "out.mute"
+        session.setProperty("screen", "config")
+        _settle(app, 3)
+        # tryb Multi, brak wejścia, wyłączone moduły i edycja układu
+        store.set_many({"out.mute": False, "sim.enabled": False, "iso.kill.sub": True, "xo.mute.top": True})
+        flow(mode="multi", channel_map={"sub": (0, -1), "bass": (1, -1), "mid": (2, -1), "top": (3, -1)})
+        assert _item(root, "flowBlock_limits") is not None and _item(root, "flowBlock_sim") is None
+        flow(has_input=False)
+        session.setProperty("editing", True)
+        _pump(app)
+        session.setProperty("editing", False)
+        session.set_running(False)
+        flow(running=False)
+        assert not chip.isVisible()
+    finally:
+        qInstallMessageHandler(None)
+    bad = [m for m in msgs if "qml" in m.lower() or "TypeError" in m or "ReferenceError" in m]
+    assert bad == []
+
+
+@pytest.mark.parametrize("screen", ["live", "config"])
+def test_silence_chip_keeps_header_height(app, desk, store, screen):
+    """Chip „⚠ CISZA” zastępuje chipy statusu w tym samym miejscu: nagłówek nie zmienia wysokości (karty nie
+    skaczą), gdy cisza się pojawia albo znika – także przy długim powodzie (tekst przycięty)."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtQuick import QQuickItem
+
+    from engine.signal_flow import analyze
+
+    session = desk.session
+    root = desk.rootObject()
+    header = root.findChild(QQuickItem, "liveHeader")
+    chip = root.findChild(QQuickItem, "silenceChip")
+    session.set_running(True)
+    session.set_status(["SYMULACJA", "48 kHz · 512", "11 ms"], "12%")
+    session.setProperty("screen", screen)
+    quiet = analyze(store)
+    kill_all = {f"iso.kill.{b}": True for b in ("sub", "bass", "lowmid", "highmid", "top")}
+    loud = [
+        analyze({**store.snapshot(scene_only=False), "preamp.cut": True}),
+        # najdłuższy powód: „IZOLATOR przed efektami: wszystkie pasma KILL”
+        analyze({**store.snapshot(scene_only=False), "iso.enabled": True, "iso.position": 1, **kill_all}),
+    ]
+    for w in (1280, 1366, 1600, 1920):
+        desk.resize(w, 900)
+        session.set_flow(quiet)
+        _settle(app, 4)
+        assert not chip.isVisible()
+        h0 = header.property("implicitHeight")
+        for flow in loud:
+            session.set_flow(flow)
+            _pump(app)
+            assert chip.isVisible(), (w, flow["cut"])
+            assert header.property("implicitHeight") == h0, (screen, w, flow["cut"])
+            assert chip.mapToItem(header, QPointF(chip.width(), 0)).x() <= header.width() + 0.5
+        session.set_flow(quiet)
+        _pump(app)
+        assert header.property("implicitHeight") == h0
+
+
+def test_window_flow_follows_params(qml_window, monkeypatch):
+    win, store = qml_window, qml_window.store
+    assert win.session.property("flow")["blocks"]  # policzony przy starcie okna
+    store.set("preamp.cut", True)  # bez timera: zmiana parametru od razu przelicza tor
+    keys = [r["key"] for r in win.session.property("flow")["reasons"]]
+    assert "preamp.cut" in keys
+    assert win.session.property("silenceText") == "Silnik zatrzymany – START"  # silnik nie gra
+    store.set("preamp.cut", False)
+    assert "preamp.cut" not in [r["key"] for r in win.session.property("flow")["reasons"]]
+    with monkeypatch.context() as m:  # „gra” bez danych z wejścia (licznik z timera stanu)
+        m.setattr(type(win.engine), "running", property(lambda _self: True))
+        win._no_input = 0
+        win._update_flow()
+        assert win.session.property("silenceText") == ""  # świeży start: jeszcze nie „brak wejścia”
+        win._no_input = 10
+        win._update_flow()
+        assert win.session.property("silenceText") == "Brak danych z wejścia muzyki"
+        assert win.session.property("silenceTarget") == "view:devices"
+    win._no_input = 0
+    win._update_flow()

@@ -53,6 +53,7 @@ Item {
             case "view:siren_presets": return sirenPresetsC
             case "view:midi_map": return midiMapC
             case "view:all_params": return allParamsC
+            case "view:signal_flow": return flowC
             }
             switch (root.type) {
             case "fader": return faderC
@@ -157,6 +158,10 @@ Item {
     Component {
         id: allParamsC
         AllParamsView { host: root.host; interactive: !root.editing }
+    }
+    Component {
+        id: flowC
+        SignalFlowView { host: root.host; interactive: !root.editing }
     }
 
     // --- tryb edycji ---

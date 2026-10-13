@@ -53,6 +53,7 @@ class QmlSession(QObject):
     sirenPresetsChanged = Signal()
     dspChanged = Signal()
     fxHotChanged = Signal()
+    flowChanged = Signal()
     toast = Signal(str)
     revealCard = Signal(str)  # przewiń do karty zawierającej kontrolkę o tym celu (np. "view:midi_map")
 
@@ -76,6 +77,7 @@ class QmlSession(QObject):
         self._presets: dict[str, list[dict]] = {"eq": [], "siren": []}
         self._dsp = (0, 0)
         self._fx_hot = False
+        self._flow: dict[str, Any] = {"reasons": [], "blocks": [], "cut": {}, "mode": "sim"}
         self.midi_lookup = lambda _key: ""
         self.memory_lookup = lambda _i: False
 
@@ -195,7 +197,28 @@ class QmlSession(QObject):
         """Echo się rozkręca (sprzężenie >= 100% albo powrót blisko przesterowania) – czas na FX PANIC."""
         return self._fx_hot
 
+    @Property("QVariantMap", notify=flowChanged)
+    def flow(self) -> dict[str, Any]:
+        """TOR SYGNAŁU: {reasons, blocks, cut, mode} z `engine.signal_flow.analyze` (widok i chip CISZA)."""
+        return self._flow
+
+    @Property(str, notify=flowChanged)
+    def silenceText(self) -> str:
+        """Pierwszy powód cięcia całego toru (pusty = muzyka dociera do wyjścia)."""
+        return self._flow["cut"].get("text", "")
+
+    @Property(str, notify=flowChanged)
+    def silenceTarget(self) -> str:
+        """Parametr przyczyny ciszy (do przewinięcia do karty) – pusty, gdy nie ma przyczyny lub celu."""
+        return self._flow["cut"].get("target", "")
+
     # --- aktualizacje z okna głównego ---
+    def set_flow(self, flow: dict[str, Any]) -> None:
+        """Nowy stan toru; sygnał tylko przy zmianie (okno liczy go co 500 ms i przy zmianie parametrów)."""
+        if flow != self._flow:
+            self._flow = flow
+            self.flowChanged.emit()
+
     def set_presets(self, kind: str, presets: list[tuple[str, bool]]) -> None:
         """Lista presetów rodzaju „eq” lub „siren” (patrz `presets.store.PRESET_KINDS`)."""
         items = [{"label": n if b else f"{n} *", "value": n, "builtin": b} for n, b in presets]

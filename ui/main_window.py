@@ -32,6 +32,7 @@ from engine.audio_engine import AudioEngine, EngineConfig, EngineError, find_cab
 from engine.midi import MidiController
 from engine.midi_profiles import PROFILES
 from engine.params import ParamStore
+from engine.signal_flow import analyze as analyze_flow
 from presets import store as preset_store
 from version import APP_NAME, VERSION
 
@@ -64,6 +65,7 @@ MODES = (("sim", "Symulacja (stereo)"), ("multi", "Multi (wielokanałowe)"))
 BLOCKS = (256, 512, 1024)
 DEFAULT_FS = 48000
 CPU_WARN = 0.8
+NO_INPUT_TICKS = 4  # tyle odczytów stanu (co 500 ms) bez danych z wejścia = „brak wejścia”
 VB_CABLE_URL = "https://vb-audio.com/Cable/"
 
 VIEWS = ("qml", "classic")
@@ -199,6 +201,7 @@ class MainWindow(QMainWindow):
         self._sync_scene()
         self._update_session_status()
         self._update_dsp_state()
+        self._update_flow()
         self._sync_presets()
         self._update_responses()
         QApplication.instance().installEventFilter(self)
@@ -603,6 +606,7 @@ class MainWindow(QMainWindow):
         self.session.set_running(running)
         self.lbl_state.setText(f"Działa ({self.engine.config.fs} Hz)" if running else "Zatrzymany")
         self._update_session_status()
+        self._update_flow()
 
     def _rebuild_preview(self) -> None:
         self.preview.dispose()
@@ -839,6 +843,19 @@ class MainWindow(QMainWindow):
     def _on_params_changed(self, changed: dict) -> None:
         if any(k in DSP_SWITCHES for k in changed):
             self._update_dsp_state()
+        self._update_flow()
+
+    def _update_flow(self) -> None:
+        """TOR SYGNAŁU: powody ciszy z parametrów i stanu silnika (bez pomiarów w wątku audio)."""
+        running = self.engine.running
+        self.session.set_flow(analyze_flow(
+            self.store,
+            running=running,
+            has_input=running and self._no_input < NO_INPUT_TICKS,
+            mode=self.mode,
+            channel_map=self.channel_map if self.mode == "multi" else None,
+            mic_input=self.mic_in is not None,
+        ))
 
     def _update_dsp_state(self) -> None:
         self.session.set_dsp(sum(bool(self.store[k]) for k in DSP_SWITCHES), len(DSP_SWITCHES))
@@ -960,11 +977,14 @@ class MainWindow(QMainWindow):
         st = eng.stats
         self._update_session_status()
         if not eng.running:
+            self._no_input = 0
+            self._update_flow()
             self.lbl_cpu.setText("CPU: —")
             self.lbl_lat.setText("Latencja: —")
             return
         self._no_input = 0 if st.primed else self._no_input + 1
-        if self._no_input >= 4:
+        self._update_flow()
+        if self._no_input >= NO_INPUT_TICKS:
             self.statusBar().showMessage("Brak danych z wejścia muzyki – sprawdź, czy wybrano CABLE Output i czy coś gra", 2000)
         self.lbl_cpu.setText(f"CPU: {st.cpu_load * 100:.0f}% (szczyt {st.cpu_peak * 100:.0f}%)")
         self.lbl_buf.setText(f"Niedobory: {st.underruns} | Przepełnienia: {st.overflows}")

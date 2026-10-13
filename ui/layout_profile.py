@@ -15,7 +15,7 @@ from typing import Any
 
 from engine.params import ParamSpec
 
-VERSION = 3
+VERSION = 4
 DEFAULT_NAME = "Domyślny"
 # Cele dodane do układu domyślnego w kolejnych wersjach profilu. Profil zapisany w starszej wersji
 # dostaje je przy wczytaniu w tym samym miejscu co w `default_profile` (kontrolki, pady, skróty),
@@ -24,6 +24,7 @@ DEFAULT_NAME = "Domyślny"
 ADDED: dict[int, tuple[str, ...]] = {
     2: ("echo.swell", "mic.throw", "out.fx_panic", "iso.position", "preamp.cut", "sim.enabled"),
     3: ("view:all_params",),
+    4: ("view:signal_flow",),
 }
 
 CONTROL_TYPES = ("knob", "fader", "button", "pad", "meter", "value")
@@ -63,6 +64,7 @@ VIEWS = {
     "view:siren_presets": "Presety syreny (brzmienia)",
     "view:midi_map": "MIDI – mapa kontrolera",
     "view:all_params": "Wszystkie parametry (moduły, wyszukiwanie)",
+    "view:signal_flow": "Tor sygnału – dlaczego cisza?",
 }
 # Moduły toru w widoku wszystkich parametrów (prefiks klucza → tytuł); grupy efektów mają kolor „fx”.
 PARAM_GROUPS = {
@@ -222,6 +224,8 @@ def default_profile() -> dict[str, Any]:
             _c("out.fx_panic", "button", "M", label="FX PANIC", color="kill"),
         ]),
         # --- KONFIGURACJA ---
+        # schemat toru z powodami ciszy na początku KONFIGURACJI (na LIVE wystarcza chip „CISZA” w nagłówku)
+        _card("signal_flow", "TOR SYGNAŁU", [_c("view:signal_flow", "meter", "M")], span=4, visible="config"),
         _card("devices", "URZĄDZENIA I KANAŁY", [_c("view:devices", "meter", "M")], span=2, visible="config"),
         _card("plots", "WYKRESY", [
             _c("view:response", "meter", "M"),
@@ -427,21 +431,21 @@ def compact_fx_profile() -> dict[str, Any]:
     """Kompaktowy – efekty (dub): większe echo, sprężyna, syrena i rzuty; preamp, izolator i mikrofon zwarte."""
     cards = [
         _card("echo", "ECHO", [
-            # siatka 5 kolumn: duże gałki pętli, tempo i LP w jednym rzędzie, niżej podział i przyciski
+            # jeden rząd 5 kolumn: duże gałki pętli, tempo i LP (podział widać w nagłówku karty); SWELL
+            # w karcie RZUTY – dzięki temu oba rzędy kart mieszczą się na 1280×598 (laptop 1280×720)
             _c("echo.time", "knob", "L"),
             _c("echo.feedback", "knob", "L", label="Sprzężenie", color="kill"),
             _c("echo.return", "knob", "L"),
             _c("echo.bpm", "knob", "S"),
             _c("echo.lp", "knob", "S", label="LP"),
-            _c("echo.sync", "value", "S"),
-            _c("echo.swell", "button", "S", label="SWELL", color="kill"),
-            _c("action:tap", "button", "S"),
             # pod „WIĘCEJ”
+            _c("echo.sync", "value", "S"),
+            _c("action:tap", "button", "S"),
             _c("echo.hp", "knob", "S", label="HP"),
             _c("echo.wow", "knob", "S", label="Wow"),
             _c("echo.drive", "knob", "S", label="Taśma"),
             _c("echo.glide", "knob", "S", label="Bezwł."),
-        ], color="fx", span=2, cols=5, more=8, toggle="echo.enabled", info="echo.sync"),
+        ], color="fx", span=2, cols=5, more=5, toggle="echo.enabled", info="echo.sync"),
         _card("spring", "SPRĘŻYNA", [
             _c("spring.decay", "knob", "M"),
             _c("spring.tone", "knob", "S"),
@@ -449,9 +453,9 @@ def compact_fx_profile() -> dict[str, Any]:
             _c("spring.crash", "button", "S", label="CRASH", color="fx"),
         ], color="fx", cols=3, toggle="spring.enabled"),
         _card("siren", "SYRENA", [
-            _c("siren.pitch", "knob", "M", label="Pitch"),
-            _c("siren.lfo_rate", "knob", "M", label="LFO"),
-            _c("siren.lfo_depth", "knob", "M", label="Głęb."),
+            _c("siren.pitch", "knob", "S", label="Pitch"),
+            _c("siren.lfo_rate", "knob", "S", label="LFO"),
+            _c("siren.lfo_depth", "knob", "S", label="Głęb."),
             _c("view:siren_memories", "meter", "S"),
             # pod „WIĘCEJ”
             _c("siren.sweep", "knob", "S"),
@@ -463,12 +467,13 @@ def compact_fx_profile() -> dict[str, Any]:
             _c("siren.release", "knob", "S"),
             _c("siren.echo_send", "knob", "S", label="Do echa"),
         ], color="fx", cols=3, more=4, info="siren.wave"),
-        # sendy muzyki i mikrofonu do efektów oraz rzuty (send syreny jest w karcie SYRENA pod „WIĘCEJ”)
+        # sendy muzyki i mikrofonu do efektów oraz rzuty i SWELL (send syreny jest w karcie SYRENA pod „WIĘCEJ”)
         _card("throws", "RZUTY I SENDY", [
             _c("preamp.echo_send", "knob", "S", label="Echo", color="fx"),
             _c("preamp.spring_send", "knob", "S", label="Spring", color="fx"),
             _c("mic.echo_send", "knob", "S", label="Mic echo", color="fx"),
             _c("echo.throw", "button", "S", label="THROW", color="fx"),
+            _c("echo.swell", "button", "S", label="SWELL", color="kill"),
             _c("mic.throw", "button", "S", label="MIC THR.", color="fx"),
             _c("preamp.cut", "button", "S", label="DRY CUT", color="kill"),
         ], color="fx", cols=3),
@@ -747,6 +752,21 @@ def _insert_after(items: list[dict], default_items: list[dict], idx: int) -> int
     return 0
 
 
+def _card_pos(cards: list[dict], default_cards: list[dict], cid: str) -> int:
+    """Pozycja dla karty `cid` z układu domyślnego: za najbliższą poprzedzającą ją kartą obecną w profilu
+    (bez takiej – przed najbliższą następną, a gdy nie ma żadnej – na końcu)."""
+    ids = [c["id"] for c in cards]
+    order = [c["id"] for c in default_cards]
+    i = order.index(cid)
+    for prev in reversed(order[:i]):
+        if prev in ids:
+            return ids.index(prev) + 1
+    for nxt in order[i + 1:]:
+        if nxt in ids:
+            return ids.index(nxt)
+    return len(cards)
+
+
 def _migrate(prof: dict[str, Any], version: int, specs: dict[str, ParamSpec]) -> None:
     """Dokłada do profilu ze starszej wersji cele dodane później do układu domyślnego (`ADDED`)."""
     default = normalize(default_profile(), specs)
@@ -757,9 +777,9 @@ def _migrate(prof: dict[str, Any], version: int, specs: dict[str, ParamSpec]) ->
             if idx is None or in_cards:
                 continue
             card = next((c for c in prof["cards"] if c["id"] == dcard["id"]), None)
-            if card is None:  # karta usunięta – wraca tylko z nową kontrolką
+            if card is None:  # karta usunięta lub nowa – wraca tylko z nową kontrolką, w miejscu z układu domyślnego
                 card = copy.deepcopy(dcard) | {"controls": [], "more": 0}
-                prof["cards"].append(card)
+                prof["cards"].insert(_card_pos(prof["cards"], default["cards"], dcard["id"]), card)
             pos = _insert_after(card["controls"], dcard["controls"], idx)
             card["controls"].insert(pos, copy.deepcopy(dcard["controls"][idx]))
             # widoczna w układzie domyślnym → widoczna też tutaj (bez chowania innych pod „WIĘCEJ”)

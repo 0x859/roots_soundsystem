@@ -163,17 +163,53 @@ Rectangle {
     }
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
     function cardItem(ci) { return cardRep.itemAt(ci) }
-    // przewija ekran do pierwszej karty z kontrolką o danym celu (np. mapa MIDI z menu okna)
+    // karta steruje celem: kontrolka, KILL suwaka albo przełącznik ON/OFF w nagłówku
+    function cardHas(card, target) {
+        return card.toggle === target || card.controls.some(c => c.param === target || c.kill === target)
+    }
+    property string lastReveal: ""  // ostatni cel, do którego przewinięto ekran (autotest)
+    // przewija ekran do pierwszej widocznej karty z danym celem (np. mapa MIDI z menu okna); false = brak
     function revealTarget(target) {
         const cards = Profile.cards
         for (let ci = 0; ci < cards.length; ci++) {
-            if (!cards[ci].controls.some(c => c.param === target)) continue
+            if (!cardHas(cards[ci], target)) continue
             const item = cardItem(ci)
             if (!item || !item.visible) continue
             const y = item.mapToItem(flick.contentItem, 0, 0).y
             flick.contentY = Math.max(0, Math.min(y - 8 * root.s, flick.contentHeight - flick.height))
+            lastReveal = target
+            return true
+        }
+        return false
+    }
+    // TOR SYGNAŁU: karta z celem na tym ekranie, a jeśli jest tylko na drugim – przełączenie ekranu
+    // (KONFIGURACJA w blokadzie LIVE wymaga przytrzymania przełącznika, więc tu tylko podpowiedź)
+    function showTarget(target) {
+        if (!target || revealTarget(target)) return
+        const other = Session.screen === "live" ? "config" : "live"
+        const card = Profile.cards.find(c => cardHas(c, target) && (c.visible === other || c.visible === "both"))
+        if (card === undefined) {
+            const sc = Profile.shortcutFor(target)
+            Session.hint("Brak karty z „" + Params.labelOf(target) + "” w układzie"
+                         + (sc !== "" ? " – klawisz " + sc : "") + " (dodaj ją w ✎ UKŁAD)")
             return
         }
+        if (other === "config" && Session.locked) {
+            Session.hint("BLOKADA LIVE – „" + Params.labelOf(target) + "” jest na KONFIGURACJI (przytrzymaj przełącznik)")
+            return
+        }
+        Session.screen = other
+        revealTimer.target = target
+        revealTimer.restart()
+    }
+    // chip „⚠ CISZA” w nagłówku: widok toru na tym ekranie, potem karta przyczyny, inaczej podpowiedź
+    function showSilence() {
+        if (revealTarget("view:signal_flow")) return
+        const t = Session.silenceTarget
+        if (t !== "" && revealTarget(t)) return
+        const sc = t !== "" ? Profile.shortcutFor(t) : ""
+        Session.hint("CISZA: " + Session.silenceText + (sc !== "" ? " – klawisz " + sc : "")
+                     + ". Schemat: KONFIGURACJA → TOR SYGNAŁU")
     }
 
     // --- interfejs dla kart, kontrolek i inspektora (host) ---
@@ -401,8 +437,10 @@ Rectangle {
         spacing: 14 * root.s
 
         LiveHeader {
+            objectName: "liveHeader"
             visible: !root.editing
             Layout.fillWidth: true
+            onSilenceClicked: root.showSilence()
         }
         EditHeader {
             visible: root.editing

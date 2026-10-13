@@ -8,6 +8,7 @@ Rectangle {
     readonly property real pad: 10 * s
     readonly property real gap: 10 * s
     readonly property bool fits: left.implicitWidth + right.implicitW + gap + 2 * pad <= width
+    signal silenceClicked()  // chip „⚠ CISZA” – Main.qml przewija do widoku toru albo karty przyczyny
 
     color: Theme.card
     radius: 12 * s
@@ -145,47 +146,101 @@ Rectangle {
         y: root.fits ? root.pad + (left.height - height) / 2 : left.y + left.height + root.gap
         width: root.fits ? implicitW : root.width - 2 * root.pad
         spacing: 8 * root.s
-        readonly property real implicitW: chips.implicitWidth + (fx.visible ? fx.width + spacing : 0) + midi.width + dsp.width
+        readonly property real implicitW: status.width + (fx.visible ? fx.width + spacing : 0) + midi.width + dsp.width
                                           + nav.implicitWidth + tools.implicitWidth + 4 * spacing
 
-        Row {
-            id: chips
-            spacing: 8 * root.s
+        // chipy statusu, a na czas ciszy w tym samym miejscu chip „⚠ CISZA”; gdy silnik gra, miejsce ma
+        // szerokość max(chipy, minimum chipu ciszy) niezależnie od ciszy – nagłówek nie skacze przy ostrzeżeniu
+        Item {
+            id: status
+            objectName: "statusSlot"
+            readonly property real chipsW: chips.implicitWidth
+            readonly property real silenceMin: 250 * root.s
+            width: Math.min(Session.running ? Math.max(chips.implicitWidth, silenceMin) : chips.implicitWidth,
+                            Math.max(0, root.width - 2 * root.pad))
             height: 48 * root.s
-            Repeater {
-                model: Session.chips
-                delegate: Rectangle {
-                    required property string modelData
+
+            Row {
+                id: chips
+                anchors.right: parent.right
+                spacing: 8 * root.s
+                height: 48 * root.s
+                opacity: silence.visible ? 0 : 1  // nie `visible` – szerokość chipów liczona także w czasie ciszy
+                Repeater {
+                    model: Session.chips
+                    delegate: Rectangle {
+                        required property string modelData
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: chipText.implicitWidth + 20 * root.s
+                        height: 30 * root.s
+                        radius: 6 * root.s
+                        color: Theme.raised
+                        Text {
+                            id: chipText
+                            anchors.centerIn: parent
+                            text: modelData
+                            color: Qt.darker(Theme.text, 1.12)
+                            font.family: Theme.valueFont
+                            font.pixelSize: Math.round(13 * root.s)
+                        }
+                    }
+                }
+                Rectangle {
+                    visible: Session.cpu !== ""
                     anchors.verticalCenter: parent.verticalCenter
-                    width: chipText.implicitWidth + 20 * root.s
+                    width: cpuText.implicitWidth + 20 * root.s
                     height: 30 * root.s
                     radius: 6 * root.s
                     color: Theme.raised
                     Text {
-                        id: chipText
+                        id: cpuText
                         anchors.centerIn: parent
-                        text: modelData
+                        textFormat: Text.StyledText
+                        text: "CPU <font color='" + Theme.accent + "'>" + Session.cpu + "</font>"
                         color: Qt.darker(Theme.text, 1.12)
                         font.family: Theme.valueFont
                         font.pixelSize: Math.round(13 * root.s)
                     }
                 }
             }
-            Rectangle {
-                visible: Session.cpu !== ""
-                anchors.verticalCenter: parent.verticalCenter
-                width: cpuText.implicitWidth + 20 * root.s
-                height: 30 * root.s
-                radius: 6 * root.s
-                color: Theme.raised
-                Text {
-                    id: cpuText
-                    anchors.centerIn: parent
-                    textFormat: Text.StyledText
-                    text: "CPU <font color='" + Theme.accent + "'>" + Session.cpu + "</font>"
-                    color: Qt.darker(Theme.text, 1.12)
-                    font.family: Theme.valueFont
-                    font.pixelSize: Math.round(13 * root.s)
+
+            // coś tnie cały tor muzyki, a silnik gra: pierwszy powód (+ skrót), tekst przycięty do miejsca
+            // chipów; klik tylko przewija (bez przytrzymania także w blokadzie LIVE – niczego nie przełącza)
+            Item {
+                id: silence
+                objectName: "silenceChip"
+                readonly property string sc: Session.silenceTarget !== "" ? Profile.shortcutFor(Session.silenceTarget) : ""
+                readonly property string text: "⚠ CISZA: " + Session.silenceText + (sc !== "" ? " (" + sc + ")" : "")
+                visible: Session.running && Session.silenceText !== ""
+                anchors.fill: parent
+                Rectangle {
+                    id: silenceBox
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    height: 40 * root.s
+                    radius: 8 * root.s
+                    color: silenceArea.pressed ? Theme.kill : Qt.rgba(0.85, 0.2, 0.2, 0.22)
+                    border.color: Theme.kill
+                    Text {
+                        id: silenceText
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: 12 * root.s
+                        width: parent.width - 24 * root.s
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        text: silence.text
+                        color: "#FFFFFF"
+                        font.family: Theme.labelFont
+                        font.weight: Font.Bold
+                        font.pixelSize: Math.round(15 * root.s)
+                        font.letterSpacing: 1.0
+                    }
+                    MouseArea {
+                        id: silenceArea
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.silenceClicked()
+                    }
                 }
             }
         }

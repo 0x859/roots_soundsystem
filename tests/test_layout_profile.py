@@ -186,7 +186,41 @@ def test_new_default_controls_are_registered(store):
     default = lp.normalize(lp.default_profile(), store.specs)
     assert max(lp.ADDED) == lp.VERSION
     assert {t for v in lp.ADDED for t in lp.ADDED[v]} <= _targets(default)
-    assert len(_targets(default)) == 143
+    assert len(_targets(default)) == 144
+
+
+def test_migration_v3_adds_signal_flow_card(store):
+    """Profil v3 dostaje kartę TOR SYGNAŁU na KONFIGURACJI w miejscu z układu domyślnego (przed URZĄDZENIAMI);
+    karty LIVE i ustawienia użytkownika zostają bez zmian, usunięta w v4 karta nie wraca."""
+    default = lp.normalize(lp.default_profile(), store.specs)
+    card = next(c for c in default["cards"] if c["id"] == "signal_flow")
+    assert card["visible"] == "config" and card["span"] == 4 and card["title"] == "TOR SYGNAŁU"
+    old = copy.deepcopy(default)
+    old["cards"] = [c for c in old["cards"] if c["id"] != "signal_flow"]
+    old["cards"][0]["title"] = "MÓJ PREAMP"
+    old["version"] = 3
+    prof = lp.normalize(old, store.specs)
+    assert prof == default | {"cards": [dict(c, title="MÓJ PREAMP") if c["id"] == "preamp" else c
+                                        for c in default["cards"]]}
+    ids = [c["id"] for c in prof["cards"]]
+    assert ids.index("signal_flow") == ids.index("devices") - 1
+    cur = copy.deepcopy(default)
+    cur["cards"] = [c for c in cur["cards"] if c["id"] != "signal_flow"]
+    assert "view:signal_flow" not in _targets(lp.normalize(cur, store.specs))
+
+
+@pytest.mark.parametrize("name", [lp.COMPACT_NAME, lp.COMPACT_FX_NAME])
+def test_migration_v3_compact_copy_keeps_live(store, name):
+    """Zapisana kopia szablonu kompaktowego z v3: TOR SYGNAŁU tylko na KONFIGURACJI, karty LIVE bez zmian."""
+    fresh = lp.normalize(lp.template_profile(name), store.specs)
+    assert any(c["id"] == "signal_flow" and c["visible"] == "config" for c in fresh["cards"])
+    old = copy.deepcopy(fresh)
+    old["cards"] = [c for c in old["cards"] if c["id"] != "signal_flow"]
+    old["version"] = 3
+    prof = lp.normalize(old, store.specs)
+    live = [c for c in prof["cards"] if c["visible"] != "config"]
+    assert live == [c for c in fresh["cards"] if c["visible"] != "config"]
+    assert [c["id"] for c in prof["cards"]] == [c["id"] for c in fresh["cards"]]
 
 
 def test_param_groups_cover_every_param(store):
