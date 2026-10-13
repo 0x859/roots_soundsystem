@@ -97,6 +97,10 @@ class MidiController:
         self.on_status: Callable[[str], None] | None = None  # "connected" / "disconnected"
         self.activity: dict[str, int] = {}  # licznik komunikatów na element (podświetlenie na mapie)
         self.last_event: tuple[str, float] | None = None
+        # cel ostatniego komunikatu i warstwa ustalone w chwili odbioru (HUD gestu); None = SHIFT albo brak przypisania
+        self.last_target: str | None = None
+        self.last_shift = False  # cel z własnego przypisania warstwy SHIFT
+        self.events = 0  # licznik komunikatów: ten sam element ruszony ponownie też odświeża podgląd
         self.revision = 0  # rośnie przy każdej zmianie mapy, profilu lub połączenia (odświeżanie podglądu)
         self._toggle_state: dict[str, bool] = {}
         self._held: dict[str, str] = {}  # wciśnięte przyciski chwilowe: element -> cel z chwili wciśnięcia
@@ -341,6 +345,8 @@ class MidiController:
             return
         self.activity[mid] = self.activity.get(mid, 0) + 1
         self.last_event = (mid, value)
+        self.last_target, self.last_shift = None, False
+        self.events += 1
         if mid == self.shift_id:
             self._shift_held = value >= 0.5
             return
@@ -351,15 +357,19 @@ class MidiController:
             self._latched.add((mid, self.armed_key))  # świadome przypisanie: steruje od razu
             self._mark_led(mid)
             key, self.armed_key = self.armed_key, None
+            self.last_target, self.last_shift = key, self._shift_held
             self.revision += 1
             if self.on_learned:
                 self.on_learned(mid, key)
             return
         target = self.target_for(mid)
+        shift = self._shift_held and mid in self.shift_mapping
         pressed = value >= 0.5
         if not pressed and mid in self._held:
             # puszczenie zwalnia cel z chwili wciśnięcia – SOLO mogło zostać puszczone lub wciśnięte w trakcie
             target = self._held.pop(mid)
+            shift = target != self.mapping.get(mid)
+        self.last_target, self.last_shift = target, shift and target is not None
         if target is None:
             self._hw[mid] = value
             return

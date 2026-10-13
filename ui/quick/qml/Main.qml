@@ -423,149 +423,163 @@ Rectangle {
             Layout.fillHeight: true
             spacing: 0
 
-            Flickable {
-                id: flick
+            // obszar kart: siatka w Flickable + nakładka MIDI (HUD gestu, ściąga SHIFT) nad nią – nakładka
+            // nie zasłania nagłówka ani padów i żyje poza Repeaterem kart
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                contentWidth: width
-                contentHeight: grid.implicitHeight + (root.editing ? endZone.height + root.gap : 0) + 4
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                interactive: root.dragInfo === null && root.rs === null
-                ScrollBar.vertical: ScrollBar { id: vbar }
 
-                // tło: klik w puste miejsce zdejmuje zaznaczenie
-                MouseArea {
-                    width: flick.width
-                    height: Math.max(flick.height, flick.contentHeight)
-                    enabled: root.editing
-                    onClicked: { root.selCard = -1; root.selCtl = -1; root.forceActiveFocus() }
-                }
+                Flickable {
+                    id: flick
+                    anchors.fill: parent
+                    contentWidth: width
+                    contentHeight: grid.implicitHeight + (root.editing ? endZone.height + root.gap : 0) + 4
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    interactive: root.dragInfo === null && root.rs === null
+                    ScrollBar.vertical: ScrollBar { id: vbar }
 
-                // prowadnice kolumn siatki (tryb edycji)
-                Repeater {
-                    model: root.editing ? root.columns : 0
-                    delegate: Rectangle {
-                        required property int index
-                        x: index * (root.colW + root.gap)
-                        width: root.colW
-                        height: Math.max(flick.height, flick.contentHeight)
-                        radius: 12 * root.s
-                        color: Qt.rgba(1, 1, 1, 0.025)
-                        border.color: Qt.rgba(1, 1, 1, 0.04)
-                    }
-                }
-
-                GridLayout {
-                    id: grid
-                    width: flick.width - (vbar.visible && vbar.size < 1 ? 12 : 0)
-                    // poza edycją rzędy kart rozciągają się do wysokości ekranu (bez pustego pasa pod kartami)
-                    height: root.editing ? implicitHeight : Math.max(implicitHeight, flick.height - 4)
-                    columns: root.columns
-                    columnSpacing: root.gap
-                    rowSpacing: root.gap
-
-                    Repeater {
-                        id: cardRep
-                        model: Profile.cards
-                        delegate: Card {
-                            required property int index
-                            required property var modelData
-                            readonly property int span: root.spanOf(index, modelData.span)
-                            cardData: modelData
-                            ci: index
-                            host: root
-                            visible: root.cardShown(modelData)
-                            editing: root.editing
-                            selected: root.editing && root.selCard === index
-                            selK: root.selCtl
-                            dropTarget: root.dragInfo !== null && root.dragInfo.kind === "card" && root.dropCi === index
-                            dropAfter: root.dropAfter
-                            dropK: root.dragInfo !== null && root.dragInfo.kind === "control" && root.dropCi === index ? root.dropK : -1
-                            dropKAfter: root.dropKAfter
-                            expanded: root.cardExpanded(modelData.id)
-                            Layout.columnSpan: span
-                            Layout.rowSpan: modelData.rows
-                            Layout.preferredWidth: root.colW * span + root.gap * (span - 1)
-                            Layout.maximumWidth: Layout.preferredWidth
-                            Layout.maximumHeight: fixedH > 0 ? fixedH : Number.POSITIVE_INFINITY
-                            Layout.fillHeight: true
-                            Layout.alignment: Qt.AlignTop
-                        }
-                    }
-                }
-
-                // strefa na końcu: nowa karta / upuszczenie karty na koniec
-                Rectangle {
-                    id: endZone
-                    visible: root.editing
-                    y: grid.implicitHeight + root.gap
-                    width: grid.width
-                    height: 64 * root.s
-                    radius: 12 * root.s
-                    color: root.dropEnd ? Qt.rgba(0.25, 0.71, 0.66, 0.15) : "transparent"
-                    border.color: root.dropEnd ? Theme.fx : Qt.darker(Theme.accent, 1.8)
-                    Text {
-                        anchors.centerIn: parent
-                        text: root.dragInfo && root.dragInfo.kind === "card" ? "UPUŚĆ TUTAJ, ABY PRZENIEŚĆ NA KONIEC" : "+ NOWA KARTA"
-                        color: Theme.accent
-                        font.family: Theme.labelFont
-                        font.weight: Font.DemiBold
-                        font.pixelSize: Math.round(15 * root.s)
-                        font.letterSpacing: 1.5
-                    }
+                    // tło: klik w puste miejsce zdejmuje zaznaczenie
                     MouseArea {
-                        anchors.fill: parent
-                        onClicked: root.selectCard(Profile.addCard("", Session.screen === "config" ? "config" : "live"))
+                        width: flick.width
+                        height: Math.max(flick.height, flick.contentHeight)
+                        enabled: root.editing
+                        onClicked: { root.selCard = -1; root.selCtl = -1; root.forceActiveFocus() }
                     }
-                }
 
-                // podgląd nowego rozmiaru karty
-                Rectangle {
-                    visible: root.rs !== null
-                    z: 20
-                    x: root.rs ? root.rs.card.x : 0
-                    y: root.rs ? root.rs.card.y : 0
-                    width: root.rs ? root.rs.span * root.colW + (root.rs.span - 1) * root.gap : 0
-                    height: root.rs ? root.rs.height : 0
-                    radius: 12 * root.s
-                    color: Qt.rgba(0.89, 0.65, 0.17, 0.10)
-                    border.width: 2
-                    border.color: Theme.accent
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: sizeLabel.implicitWidth + 24
-                        height: sizeLabel.implicitHeight + 12
-                        radius: 8
-                        color: Theme.accent
-                        Text {
-                            id: sizeLabel
-                            anchors.centerIn: parent
-                            text: root.rs ? root.rs.span + " kol." + (root.rs.mode !== "w" ? " · " + Math.round(root.rs.height / root.s) + " px" : "") : ""
-                            color: Theme.bg
-                            font.family: Theme.labelFont
-                            font.weight: Font.Bold
-                            font.pixelSize: Math.round(22 * root.s)
+                    // prowadnice kolumn siatki (tryb edycji)
+                    Repeater {
+                        model: root.editing ? root.columns : 0
+                        delegate: Rectangle {
+                            required property int index
+                            x: index * (root.colW + root.gap)
+                            width: root.colW
+                            height: Math.max(flick.height, flick.contentHeight)
+                            radius: 12 * root.s
+                            color: Qt.rgba(1, 1, 1, 0.025)
+                            border.color: Qt.rgba(1, 1, 1, 0.04)
                         }
                     }
+
+                    GridLayout {
+                        id: grid
+                        width: flick.width - (vbar.visible && vbar.size < 1 ? 12 : 0)
+                        // poza edycją rzędy kart rozciągają się do wysokości ekranu (bez pustego pasa pod kartami)
+                        height: root.editing ? implicitHeight : Math.max(implicitHeight, flick.height - 4)
+                        columns: root.columns
+                        columnSpacing: root.gap
+                        rowSpacing: root.gap
+
+                        Repeater {
+                            id: cardRep
+                            model: Profile.cards
+                            delegate: Card {
+                                required property int index
+                                required property var modelData
+                                readonly property int span: root.spanOf(index, modelData.span)
+                                cardData: modelData
+                                ci: index
+                                host: root
+                                visible: root.cardShown(modelData)
+                                editing: root.editing
+                                selected: root.editing && root.selCard === index
+                                selK: root.selCtl
+                                dropTarget: root.dragInfo !== null && root.dragInfo.kind === "card" && root.dropCi === index
+                                dropAfter: root.dropAfter
+                                dropK: root.dragInfo !== null && root.dragInfo.kind === "control" && root.dropCi === index ? root.dropK : -1
+                                dropKAfter: root.dropKAfter
+                                expanded: root.cardExpanded(modelData.id)
+                                Layout.columnSpan: span
+                                Layout.rowSpan: modelData.rows
+                                Layout.preferredWidth: root.colW * span + root.gap * (span - 1)
+                                Layout.maximumWidth: Layout.preferredWidth
+                                Layout.maximumHeight: fixedH > 0 ? fixedH : Number.POSITIVE_INFINITY
+                                Layout.fillHeight: true
+                                Layout.alignment: Qt.AlignTop
+                            }
+                        }
+                    }
+
+                    // strefa na końcu: nowa karta / upuszczenie karty na koniec
+                    Rectangle {
+                        id: endZone
+                        visible: root.editing
+                        y: grid.implicitHeight + root.gap
+                        width: grid.width
+                        height: 64 * root.s
+                        radius: 12 * root.s
+                        color: root.dropEnd ? Qt.rgba(0.25, 0.71, 0.66, 0.15) : "transparent"
+                        border.color: root.dropEnd ? Theme.fx : Qt.darker(Theme.accent, 1.8)
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.dragInfo && root.dragInfo.kind === "card" ? "UPUŚĆ TUTAJ, ABY PRZENIEŚĆ NA KONIEC" : "+ NOWA KARTA"
+                            color: Theme.accent
+                            font.family: Theme.labelFont
+                            font.weight: Font.DemiBold
+                            font.pixelSize: Math.round(15 * root.s)
+                            font.letterSpacing: 1.5
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: root.selectCard(Profile.addCard("", Session.screen === "config" ? "config" : "live"))
+                        }
+                    }
+
+                    // podgląd nowego rozmiaru karty
+                    Rectangle {
+                        visible: root.rs !== null
+                        z: 20
+                        x: root.rs ? root.rs.card.x : 0
+                        y: root.rs ? root.rs.card.y : 0
+                        width: root.rs ? root.rs.span * root.colW + (root.rs.span - 1) * root.gap : 0
+                        height: root.rs ? root.rs.height : 0
+                        radius: 12 * root.s
+                        color: Qt.rgba(0.89, 0.65, 0.17, 0.10)
+                        border.width: 2
+                        border.color: Theme.accent
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: sizeLabel.implicitWidth + 24
+                            height: sizeLabel.implicitHeight + 12
+                            radius: 8
+                            color: Theme.accent
+                            Text {
+                                id: sizeLabel
+                                anchors.centerIn: parent
+                                text: root.rs ? root.rs.span + " kol." + (root.rs.mode !== "w" ? " · " + Math.round(root.rs.height / root.s) + " px" : "") : ""
+                                color: Theme.bg
+                                font.family: Theme.labelFont
+                                font.weight: Font.Bold
+                                font.pixelSize: Math.round(22 * root.s)
+                            }
+                        }
+                    }
+
+                    Text {
+                        visible: !root.editing && !hasVisibleCard()
+                        function hasVisibleCard() {
+                            for (let i = 0; i < Profile.cards.length; i++) if (root.cardShown(Profile.cards[i])) return true
+                            return false
+                        }
+                        width: flick.width
+                        topPadding: 40 * root.s
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        text: Session.screen === "config"
+                              ? "Brak kart konfiguracji. Pełne ustawienia: STÓŁ KLASYCZNY; własne karty: ✎ UKŁAD → + NOWA KARTA."
+                              : "Brak kart na tym ekranie. Dodaj je w trybie ✎ UKŁAD."
+                        color: Theme.muted
+                        font.family: Theme.labelFont
+                        font.pixelSize: Math.round(18 * root.s)
+                    }
                 }
 
-                Text {
-                    visible: !root.editing && !hasVisibleCard()
-                    function hasVisibleCard() {
-                        for (let i = 0; i < Profile.cards.length; i++) if (root.cardShown(Profile.cards[i])) return true
-                        return false
-                    }
-                    width: flick.width
-                    topPadding: 40 * root.s
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    text: Session.screen === "config"
-                          ? "Brak kart konfiguracji. Pełne ustawienia: STÓŁ KLASYCZNY; własne karty: ✎ UKŁAD → + NOWA KARTA."
-                          : "Brak kart na tym ekranie. Dodaj je w trybie ✎ UKŁAD."
-                    color: Theme.muted
-                    font.family: Theme.labelFont
-                    font.pixelSize: Math.round(18 * root.s)
+                MidiOverlay {
+                    id: midiOverlay
+                    objectName: "midiOverlay"
+                    anchors.fill: parent
+                    z: 50
+                    editing: root.editing
                 }
             }
 

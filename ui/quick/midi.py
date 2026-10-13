@@ -1,7 +1,8 @@
 """Kontroler MIDI dla QML: port, profil, podgląd mapy (układ fizyczny + przypisania) i edycja przypisań.
 
 Stan mapy odświeża się po zmianie `MidiController.revision`, stan „na żywo” (pozycje elementów,
-aktywność, SHIFT) – w `tick()` wołanym z timera okna, tylko gdy coś się zmieniło.
+aktywność, SHIFT) – w `tick()` wołanym z timera okna, tylko gdy coś się zmieniło. Ostatni komunikat
+(cel, warstwa, licznik – HUD gestu w `MidiOverlay.qml`) ma osobny sygnał `eventChanged`.
 """
 
 from __future__ import annotations
@@ -20,12 +21,13 @@ MODULES = {
     "out": "WYJŚCIE", "action": "AKCJA",
 }
 FX_MODULES = ("echo", "spring", "siren")
-KILL_PREFIXES = ("iso.kill.", "out.mute", "xo.mute.")
+KILL_PREFIXES = ("iso.kill.", "out.mute", "xo.mute.", "out.fx_panic")
 
 
 class QmlMidi(QObject):
     stateChanged = Signal()
     liveChanged = Signal()
+    eventChanged = Signal()  # nowy komunikat z kontrolera (lastTarget, lastShift, lastInfo, eventSerial)
     selectionChanged = Signal()
     portRequested = Signal(str)  # okno otwiera port (zapis w ustawieniach, komunikaty o błędach)
     fileRequested = Signal(str)  # "export" | "import" – okno pokazuje okno wyboru pliku
@@ -38,10 +40,13 @@ class QmlMidi(QObject):
         self._flags: tuple = ()
         self._strips: list[dict] = []
         self._others: list[dict] = []
+        self._sheet: list[dict] = []
         self._live: tuple = ()
         self._hw: dict[str, float] = {}
         self._activity: dict[str, int] = {}
         self._last = ""
+        self._serial = -1
+        self._event: dict[str, Any] = {}
         self._selected = ""
         self._shift_view = False
         self.refreshPorts()
@@ -82,6 +87,7 @@ class QmlMidi(QObject):
     def _rebuild(self) -> None:
         c = self.ctl
         strips = []
+        sheet = []
         on_map: set[str] = set()
         for strip in c.layout:
             elements = []
@@ -99,12 +105,20 @@ class QmlMidi(QObject):
                 }
                 elements.append(item)
             strips.append({"name": strip.name, "elements": elements})
+            # ściąga SHIFT: kolumny z gałkami; gałki i przyciski bez osobnego komunikatu przy SHIFT (Rec Arm) –
+            # rząd Mute przy SOLO wysyła inne nuty i działa jak Mute, więc ściąga go pomija
+            picked = [x for x in elements if x["kind"] == "knob" or (x["kind"] == "button" and x["sid"] == x["id"]
+                                                                     and not x["isShift"])]
+            if any(x["kind"] == "knob" for x in elements):
+                sheet.append({"name": strip.name, "elements": [
+                    {"id": x["id"], "kind": x["kind"], "name": x["name"], "code": x["code"], "own": x["shiftOwn"]}
+                    | x["shift"] for x in picked]})
         others = []
         for shift, layer in ((False, c.mapping), (True, c.shift_mapping)):
             for mid, target in sorted(layer.items()):
                 if mid not in on_map:
                     others.append({"id": mid, "name": element_name(mid), "shift": shift} | self._describe(mid, target))
-        self._strips, self._others = strips, others
+        self._strips, self._others, self._sheet = strips, others, sheet
 
     def tick(self) -> None:
         """Wołane z timera okna (~30 Hz): emituje sygnały tylko przy zmianach."""
@@ -114,18 +128,25 @@ class QmlMidi(QObject):
             self._rev, self._flags = c.revision, flags
             self._rebuild()
             self.stateChanged.emit()
-        last = ""
-        if c.last_event is not None:
-            mid, value = c.last_event
-            target = c.target_for(mid)
-            last = f"{element_name(mid)} = {round(value * 127)}" + (f" → {self._label(target)}" if target else "")
-        live = (c.shift_held, last, sum(c.activity.values()))
+        new_event = c.events != self._serial
+        if new_event:
+            # cel i warstwa z chwili odbioru (`MidiController.last_target`), nie przeliczane po zmianie SHIFT
+            self._serial = c.events
+            target = c.last_target
+            self._event = {}
+            self._last = ""
+            if c.last_event is not None:
+                mid, value = c.last_event
+                self._last = f"{element_name(mid)} = {round(value * 127)}" + (f" → {self._label(target)}" if target else "")
+                self._event = self._describe(mid, target) | {"code": element_name(mid), "shift": c.last_shift}
+        live = (c.shift_held, c.events)
         if live != self._live:
             self._live = live
             self._hw = c.hw_positions()
             self._activity = dict(c.activity)
-            self._last = last
             self.liveChanged.emit()
+        if new_event:
+            self.eventChanged.emit()
 
     # --- stan ---
     @Property(bool, notify=stateChanged)
@@ -199,6 +220,31 @@ class QmlMidi(QObject):
     @Property(str, notify=liveChanged)
     def lastEvent(self) -> str:
         return self._last
+
+    @Property(str, notify=eventChanged)
+    def lastTarget(self) -> str:
+        """Cel ostatniego komunikatu (parametr albo `action:*`); pusty dla SHIFT i elementów bez przypisania."""
+        return self._event.get("target", "")
+
+    @Property(bool, notify=eventChanged)
+    def lastShift(self) -> bool:
+        """Ostatni komunikat trafił w cel z własnego przypisania warstwy SHIFT."""
+        return bool(self._event.get("shift", False))
+
+    @Property("QVariantMap", notify=eventChanged)
+    def lastInfo(self) -> dict[str, Any]:
+        """Opis ostatniego komunikatu: target, label, module, tone, bool, action, code (element), shift."""
+        return self._event
+
+    @Property(int, notify=eventChanged)
+    def eventSerial(self) -> int:
+        """Licznik komunikatów – rośnie także przy ponownym ruchu tym samym elementem."""
+        return max(0, self._serial)
+
+    @Property("QVariantList", notify=stateChanged)
+    def sheet(self) -> list[dict]:
+        """Ściąga warstwy SHIFT: kolumny [{name, elements: [{id, kind, name, code, own, target, label, module, tone, …}]}]."""
+        return self._sheet
 
     @Property(str, notify=selectionChanged)
     def selected(self) -> str:

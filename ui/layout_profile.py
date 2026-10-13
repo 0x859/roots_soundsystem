@@ -32,6 +32,7 @@ VISIBILITY = ("live", "config", "both")
 DENSITIES = ("compact", "normal", "touch")
 KNOB_STYLES = ("arc", "pointer", "both")
 PAD_POSITIONS = ("bottom", "top", "hidden")
+HUD_POSITIONS = ("top", "center", "bottom")
 NAMED_COLORS = ("auto", "accent", "fx", "kill", "blue", "cream")
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 # przełączniki działające „przy przytrzymaniu” (klawisz, pad), mimo że nie są chwilowe w scenie
@@ -109,6 +110,9 @@ DEFAULT_THEME: dict[str, Any] = {
     "autoScale": True,  # skala dopasowana do rozmiaru okna (mnożnik skali użytkownika)
     "autoExpand": True,  # karty same pokazują kontrolki spod „WIĘCEJ”, gdy mieszczą się bez przewijania
     "lockHoldMs": 800,  # blokada LIVE: tyle trzeba przytrzymać STOP, KONFIGURACJĘ, ✎ UKŁAD, DSP
+    # HUD gestu: duża nakładka z celem i wartością po ruchu elementem kontrolera MIDI (czas w ms, miejsce)
+    "hud": {"midi": True, "ms": 1500, "position": "center"},
+    "shiftSheet": True,  # ściąga warstwy SHIFT, gdy na kontrolerze trzymane jest SOLO
 }
 
 
@@ -456,6 +460,12 @@ def _theme_norm(raw: Any) -> dict[str, Any]:
     base["autoExpand"] = raw.get("autoExpand") is not False
     base["inspectorWidth"] = int(_num(raw.get("inspectorWidth"), 280, 640, 360))
     base["lockHoldMs"] = int(_num(raw.get("lockHoldMs"), 300, 3000, 800))
+    base["shiftSheet"] = raw.get("shiftSheet") is not False
+    hud = raw.get("hud")
+    if isinstance(hud, dict):
+        base["hud"]["midi"] = hud.get("midi") is not False
+        base["hud"]["ms"] = int(_num(hud.get("ms"), 500, 5000, 1500))
+        base["hud"]["position"] = _pick(hud.get("position"), HUD_POSITIONS, "center")
     pads = raw.get("pads")
     if isinstance(pads, dict):
         base["pads"]["position"] = _pick(pads.get("position"), PAD_POSITIONS, "bottom")

@@ -93,6 +93,68 @@ def test_live_state(qmidi):
     assert qmidi.property("hwShift")
 
 
+def test_last_target_serial_and_signals(qmidi):
+    """Dane HUD gestu: cel, warstwa i licznik; sygnał tylko przy nowym komunikacie, nie przy każdym ticku."""
+    events, live = [], []
+    qmidi.eventChanged.connect(lambda: events.append(qmidi.property("eventSerial")))
+    qmidi.liveChanged.connect(lambda: live.append(1))
+    for _ in range(5):
+        qmidi.tick()
+    assert events == [] and live == []
+    qmidi.ctl.handle(cc(16, 10))
+    qmidi.tick()
+    assert events == [qmidi.ctl.events] and len(live) == 1
+    assert qmidi.property("lastTarget") == "preamp.hp" and qmidi.property("lastShift") is False
+    info = qmidi.property("lastInfo")
+    assert info["module"] == "PREAMP" and info["tone"] == "accent" and not info["action"] and info["code"] == "CC 16"
+    for _ in range(5):
+        qmidi.tick()
+    assert len(events) == 1 and len(live) == 1
+    text = qmidi.property("lastEvent")
+    qmidi.ctl.handle(cc(16, 10))  # ten sam element, ta sama wartość – HUD i tak ma się odświeżyć
+    qmidi.tick()
+    assert events == [events[0], events[0] + 1] and qmidi.property("lastEvent") == text
+    qmidi.ctl.handle(cc(16, 11))
+    qmidi.ctl.handle(cc(16, 12))  # kilka komunikatów między tickami = jeden sygnał
+    qmidi.tick()
+    assert len(events) == 3 and qmidi.property("eventSerial") == qmidi.ctl.events
+
+    qmidi.ctl.handle(note(27, True))  # SOLO
+    qmidi.tick()
+    assert qmidi.property("lastTarget") == "" and qmidi.property("hwShift")
+    qmidi.ctl.handle(note(3, True))  # SOLO + Rec Arm 1 = FX PANIC
+    qmidi.ctl.handle(note(27, False))
+    qmidi.ctl.handle(note(3, False))  # puszczenie po zwolnieniu SOLO
+    qmidi.tick()
+    # cel z chwili komunikatu, a nie przeliczony w ticku po zmianie warstwy (wtedy byłby THROW)
+    assert qmidi.property("lastTarget") == "out.fx_panic" and qmidi.property("lastShift") is True
+    assert qmidi.property("lastInfo")["tone"] == "kill"
+    assert qmidi.property("lastEvent").endswith("→ " + qmidi.ctl.store.specs["out.fx_panic"].label)
+    qmidi.ctl.handle(note(12, True))  # TAP: akcja
+    qmidi.tick()
+    from engine.midi_profiles import ACTIONS
+
+    info = qmidi.property("lastInfo")
+    assert info["action"] and info["label"] == ACTIONS["action:tap"] and info["module"] == "AKCJA"
+
+
+def test_shift_sheet(qmidi):
+    """Ściąga SHIFT: 8 kolumn – gałki ×3 i Rec Arm z celem w warstwie SHIFT (bez własnego = przygaszone)."""
+    sheet = qmidi.property("sheet")
+    assert [s["name"] for s in sheet] == [str(i) for i in range(1, 9)]
+    first = sheet[0]["elements"]
+    assert [e["kind"] for e in first] == ["knob"] * 3 + ["button"]
+    assert first[0]["target"] == "preamp.gain" and first[0]["own"] and first[0]["code"] == "CC 16"
+    assert first[3]["name"] == "REC ARM" and first[3]["target"] == "out.fx_panic" and first[3]["own"]
+    tap = sheet[3]["elements"][3]
+    assert tap["target"] == "action:tap" and not tap["own"] and tap["action"]
+    qmidi.assign("note:0:12", "echo.swell", True)
+    tap = qmidi.property("sheet")[3]["elements"][3]
+    assert tap["own"] and tap["target"] == "echo.swell" and tap["tone"] == "fx"
+    qmidi.clearMapping()
+    assert qmidi.property("sheet") == []
+
+
 def test_selection_and_layer(qmidi):
     qmidi.select("cc:0:20")
     qmidi.setShiftView(True)

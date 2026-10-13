@@ -17,7 +17,7 @@ def test_selftest_from_source(tmp_path):
     result = json.loads(out.read_text(encoding="utf-8"))
     assert proc.returncode == 0, result
     assert result["ok"] and result["qml_loaded"] and result["qml_warnings"] == []
-    assert result["steps"] == ["config", "live", "edit"]
+    assert result["steps"] == ["config", "live", "edit", "midi_hud"]
     assert result["dsp_on"] == 0  # start z czystym torem
     from version import VERSION
 

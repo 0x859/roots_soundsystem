@@ -212,6 +212,33 @@ def test_activity_and_hw_position(mix):
     assert mix.activity["note:0:27"] == 1
 
 
+def test_last_target_and_layer_at_event_time(mix):
+    """Cel i warstwa ostatniego komunikatu są zapamiętane w chwili odbioru (HUD gestu), a licznik rośnie
+    przy każdym komunikacie – także przy ponownym ruchu tym samym elementem na tę samą wartość."""
+    n = mix.events
+    mix.handle(cc(16, 10))  # gałka 1.1 bez SOLO
+    assert (mix.last_target, mix.last_shift, mix.events) == ("preamp.hp", False, n + 1)
+    mix.handle(cc(16, 10))
+    assert mix.events == n + 2
+    mix.handle(note(27, True))  # SOLO: sam SHIFT nie ma celu
+    assert mix.last_target is None and not mix.last_shift
+    mix.handle(cc(16, 20))
+    assert (mix.last_target, mix.last_shift) == ("preamp.gain", True)
+    mix.handle(note(12, True))  # Rec Arm 4 bez własnego SHIFT działa jak bez SOLO
+    assert (mix.last_target, mix.last_shift) == ("action:tap", False)
+    mix.handle(note(3, True))  # SOLO + Rec Arm 1 = FX PANIC
+    assert (mix.last_target, mix.last_shift) == ("out.fx_panic", True)
+    mix.handle(note(27, False))
+    assert mix.last_target is None and mix.shift_held is False
+    mix.handle(note(3, False))  # puszczenie po zwolnieniu SOLO – cel z chwili wciśnięcia
+    assert (mix.last_target, mix.last_shift) == ("out.fx_panic", True)
+    mix.handle(cc(16, 30))  # po puszczeniu SOLO znowu warstwa zwykła
+    assert (mix.last_target, mix.last_shift) == ("preamp.hp", False)
+    mix.unassign("cc:0:16")
+    mix.handle(cc(16, 40))  # element bez przypisania
+    assert mix.last_target is None and mix.last_event == ("cc:0:16", pytest.approx(40 / 127))
+
+
 def test_element_names():
     from engine.midi import element_name
 

@@ -109,6 +109,14 @@ class QmlTheme(QObject):
     tiles = Property(bool, lambda s: bool(s._t["tiles"]), notify=changed)
     inspectorWidth = Property(int, lambda s: int(s._t["inspectorWidth"]), notify=changed)
     lockHoldMs = Property(int, lambda s: int(s._t.get("lockHoldMs", 800)), notify=changed)
+    hudMidi = Property(bool, lambda s: bool(s._hud().get("midi", True)), notify=changed)
+    hudMs = Property(int, lambda s: int(s._hud().get("ms", 1500)), notify=changed)
+    hudPosition = Property(str, lambda s: str(s._hud().get("position", "center")), notify=changed)
+    shiftSheet = Property(bool, lambda s: bool(s._t.get("shiftSheet", True)), notify=changed)
+
+    def _hud(self) -> dict[str, Any]:
+        hud = self._t.get("hud")
+        return hud if isinstance(hud, dict) else {}
 
     @Slot(str, str, result=str)
     def color(self, name: str, fallback: str = "accent") -> str:

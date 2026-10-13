@@ -89,6 +89,17 @@ def selftest(path: str) -> int:
         win.session.setProperty("editing", False)
         pump()
         steps.append("edit")
+        # HUD gestu MIDI i ściąga SHIFT: komunikaty MIDImix z atrapy (bez sprzętu), jak z timera okna
+        from types import SimpleNamespace
+
+        win.midi.apply_profile("Akai MIDImix")
+        for kind, num, value in (("cc", 16, 70), ("note", 27, 127), ("cc", 16, 60), ("note", 27, 0)):
+            msg = (SimpleNamespace(type="control_change", channel=0, control=num, value=value) if kind == "cc"
+                   else SimpleNamespace(type="note_on", channel=0, note=num, velocity=value))
+            win.midi.handle(msg)
+            win.qmidi.tick()
+            pump()
+        steps.append("midi_hud")
     qml_problems = [m for m in messages if ".qml" in m or "TypeError" in m or "ReferenceError" in m]
     result = {
         "version": VERSION,

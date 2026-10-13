@@ -516,6 +516,46 @@ Rectangle {
                         onPressedChanged: if (!pressed) Profile.setTheme("lockHoldMs", value)
                     }
 
+                    Caption { text: "HUD GESTU MIDI (PO RUCHU KONTROLERA)" }
+                    Seg {
+                        fill: true
+                        width: parent.width
+                        height: 42 * root.s
+                        fontSize: 13
+                        model: [{ label: "POKAZUJ", value: true }, { label: "WYŁĄCZONY", value: false }]
+                        current: Theme.hudMidi
+                        onPicked: (v) => Profile.setTheme("hud.midi", v)
+                    }
+                    Seg {
+                        fill: true
+                        width: parent.width
+                        height: 42 * root.s
+                        fontSize: 13
+                        model: [{ label: "GÓRA", value: "top" }, { label: "ŚRODEK", value: "center" }, { label: "DÓŁ", value: "bottom" }]
+                        current: Theme.hudPosition
+                        onPicked: (v) => Profile.setTheme("hud.position", v)
+                    }
+                    Caption { text: "HUD – CZAS WYŚWIETLANIA: " + (Theme.hudMs / 1000).toFixed(1) + " s" }
+                    Slider {
+                        width: parent.width
+                        from: 500
+                        to: 5000
+                        stepSize: 100
+                        value: Theme.hudMs
+                        onPressedChanged: if (!pressed) Profile.setTheme("hud.ms", value)
+                    }
+
+                    Caption { text: "ŚCIĄGA SHIFT (TRZYMANE SOLO)" }
+                    Seg {
+                        fill: true
+                        width: parent.width
+                        height: 42 * root.s
+                        fontSize: 13
+                        model: [{ label: "POKAZUJ", value: true }, { label: "UKRYJ", value: false }]
+                        current: Theme.shiftSheet
+                        onPicked: (v) => Profile.setTheme("shiftSheet", v)
+                    }
+
                     Caption { text: "KOLORY (#RRGGBB)" }
                     Repeater {
                         model: [["accent", "Akcent (tor)"], ["fx", "Efekty"], ["kill", "Kill / stop"], ["bg", "Tło"],

@@ -567,6 +567,181 @@ def test_theme_auto_options_backward_compatible(store):
     assert lp.normalize(old, store.specs)["theme"]["autoExpand"] is False
 
 
+def test_theme_hud_options_backward_compatible(app, store):
+    from ui.quick import QmlTheme
+
+    prof = lp.default_profile()
+    assert prof["theme"]["hud"] == {"midi": True, "ms": 1500, "position": "center"} and prof["theme"]["shiftSheet"]
+    del prof["theme"]["hud"], prof["theme"]["shiftSheet"]  # profil sprzed HUD gestu
+    theme = lp.normalize(prof, store.specs)["theme"]
+    assert theme["hud"] == lp.DEFAULT_THEME["hud"] and theme["shiftSheet"] is True
+    prof["theme"]["hud"] = {"midi": False, "ms": 99999, "position": "lewo"}
+    prof["theme"]["shiftSheet"] = False
+    theme = lp.normalize(prof, store.specs)["theme"]
+    assert theme["hud"] == {"midi": False, "ms": 5000, "position": "center"} and theme["shiftSheet"] is False
+    prof["theme"]["hud"] = {"ms": "x", "position": "bottom"}  # częściowy wpis: brakujące klucze domyślne
+    assert lp.normalize(prof, store.specs)["theme"]["hud"] == {"midi": True, "ms": 1500, "position": "bottom"}
+    prof["theme"]["hud"] = "zły wpis"
+    assert lp.normalize(prof, store.specs)["theme"]["hud"] == lp.DEFAULT_THEME["hud"]
+
+    t = QmlTheme()
+    assert t.property("hudMidi") is True and t.property("hudMs") == 1500 and t.property("hudPosition") == "center"
+    t.apply(lp.normalize(prof | {"theme": theme}, store.specs)["theme"])
+    assert t.property("hudMidi") is False and t.property("hudMs") == 5000 and t.property("shiftSheet") is False
+
+
+def _same_color(qcolor, hex_color):
+    return qcolor.name().upper() == hex_color.upper()
+
+
+def _midi_send(app, desk, *msgs):
+    """Komunikaty z kontrolera jak w oknie: obsługa, tick (~30 Hz) i przejęcie wartości do sesji."""
+    ctl = desk.midi.ctl
+    for msg in msgs:
+        ctl.handle(msg)
+    desk.midi.tick()
+    desk.session.set_pickup(ctl.pickup_pending() if ctl.pickup else {})
+    _pump(app)
+
+
+def test_midi_hud_and_shift_sheet(app, desk, layout, store):
+    """HUD gestu po ruchu elementem (cel, wartość, pickup ▲/▼, akcja bez paska), znikanie po czasie,
+    ściąga SHIFT przy trzymanym SOLO, opcje motywu i brak HUD w edycji – bez ostrzeżeń QML."""
+    from types import SimpleNamespace
+
+    from PySide6.QtQuick import QQuickItem
+
+    def cc(num, value):
+        return SimpleNamespace(type="control_change", channel=0, control=num, value=value)
+
+    def note(num, on=True):
+        return SimpleNamespace(type="note_on" if on else "note_off", channel=0, note=num, velocity=127 if on else 0)
+
+    msgs = []
+    qInstallMessageHandler(lambda _mode, _ctx, msg: msgs.append(msg))
+    try:
+        assert desk.ok, desk.error_text()
+        desk.session.setProperty("screen", "live")
+        ctl = desk.midi.ctl
+        ctl.apply_profile("Akai MIDImix")
+        desk.midi.tick()
+        root = desk.rootObject()
+        ov = root.findChild(QQuickItem, "midiOverlay")
+        hud = root.findChild(QQuickItem, "gestureHud")
+        sheet = root.findChild(QQuickItem, "shiftSheet")
+        assert ov is not None and not ov.isEnabled()  # nakładka nie przyjmuje myszy ani klawiatury
+        assert not ov.property("hudShown") and not ov.property("sheetShown")
+        layout.setTheme("hud.ms", 500)
+        _pump(app)
+
+        _midi_send(app, desk, cc(26, 90))  # gałka 3.3 = echo (efekt)
+        target = ctl.last_target
+        spec = store.specs[target]
+        assert ov.property("hudShown") and ov.property("target") == target
+        assert ov.property("title") == ("ECHO · " + spec.label).upper()
+        assert hud.property("hasBar") and _same_color(hud.property("tone"), layout.theme.property("fx"))
+
+        # przejęcie wartości: element poniżej wartości parametru → PODNIEŚ, powyżej → OPUŚĆ
+        store.set(target, spec.from_norm(0.8), source="gui")
+        _midi_send(app, desk, cc(26, 30))
+        assert ov.property("hint") == "▲ PODNIEŚ do 80%"
+        store.set(target, spec.from_norm(0.1), source="gui")
+        _midi_send(app, desk, cc(26, 40))
+        assert ov.property("hint") == "▼ OPUŚĆ do 10%"
+        store.set(target, spec.from_norm(40 / 127), source="gui")
+        _midi_send(app, desk, cc(26, 41))  # minięta wartość: gałka steruje, bez podpowiedzi
+        assert ov.property("hint") == "" and desk.session.property("pickup").get(target) is None
+
+        _settle(app, 20)  # ~0,8 s > hud.ms
+        assert not ov.property("hudShown")
+        _midi_send(app, desk, cc(26, 41))  # ten sam element, ta sama wartość – HUD wraca
+        assert ov.property("hudShown")
+
+        _midi_send(app, desk, note(12, True), note(12, False))  # Rec Arm 4 = TAP: sama nazwa akcji
+        assert ov.property("title") == "AKCJA" and not hud.property("hasBar")
+        assert hud.property("valueText") == desk.midi.property("lastInfo")["label"].upper()
+        _midi_send(app, desk, note(1, True))  # Mute 1 = KILL SUB: czerwień
+        assert _same_color(hud.property("tone"), layout.theme.property("kill"))
+        _midi_send(app, desk, note(1, False))
+
+        # SOLO trzymane: ściąga SHIFT + gałka w warstwie SHIFT
+        _midi_send(app, desk, note(27, True))
+        _settle(app, 4)
+        assert ov.property("sheetShown") and sheet.isVisible()
+        _midi_send(app, desk, cc(16, 70))
+        assert ov.property("shiftLayer") and ov.property("target") == "preamp.gain" and hud.property("compact")
+        layout.setTheme("shiftSheet", False)
+        _pump(app)
+        assert not ov.property("sheetShown")
+        layout.setTheme("shiftSheet", True)
+        _midi_send(app, desk, note(27, False))
+        assert not ov.property("sheetShown")
+
+        # nakładka nie łapie myszy: kółko nad HUD-em zmienia gałkę pod nim
+        from PySide6.QtCore import QPoint, QRectF, Qt
+        from PySide6.QtGui import QWheelEvent
+
+        layout.setTheme("hud.position", "top")
+        layout.setTheme("hud.ms", 5000)
+        _settle(app, 6)
+        _midi_send(app, desk, cc(26, 41))
+        _settle(app, 6)
+        box = hud.mapRectToScene(QRectF(0, 0, hud.width(), hud.height()))
+        under = None
+        for key, pos in _knobs(desk):
+            if box.contains(pos) and store.specs[key].kind != "choice":
+                under = (key, pos)
+                break
+        assert under is not None, "brak gałki pod HUD-em"
+        key, pos = under
+        store.reset([key])
+        QApplication.sendEvent(desk.quickWindow(), QWheelEvent(pos, pos, QPoint(), QPoint(0, 120), Qt.NoButton,
+                                                               Qt.NoModifier, Qt.NoScrollPhase, False))
+        _pump(app)
+        assert store[key] != store.specs[key].default
+
+        # edycja układu: bez HUD i bez ściągi
+        desk.session.setProperty("editing", True)
+        _pump(app)
+        assert not ov.property("hudShown")
+        _midi_send(app, desk, cc(16, 40), note(27, True))
+        assert not ov.property("hudShown") and not ov.property("sheetShown")
+        _midi_send(app, desk, note(27, False))
+        desk.session.setProperty("editing", False)
+        _pump(app)
+
+        layout.setTheme("hud.midi", False)  # HUD wyłączony w motywie
+        _midi_send(app, desk, cc(19, 10))
+        assert not ov.property("hudShown")
+        layout.setTheme("hud.midi", True)
+        for position in ("center", "bottom", "top"):
+            layout.setTheme("hud.position", position)
+            _midi_send(app, desk, cc(19, 20), note(27, True))
+            _midi_send(app, desk, note(27, False))
+        desk.session.setProperty("screen", "config")  # nakładka działa też na ekranie KONFIGURACJA
+        _midi_send(app, desk, cc(16, 30))
+        assert ov.property("hudShown")
+    finally:
+        qInstallMessageHandler(None)
+    bad = [m for m in msgs if "qml" in m.lower() or "TypeError" in m or "ReferenceError" in m]
+    assert bad == []
+
+
+def _knobs(desk):
+    """Widoczne gałki: (klucz parametru, środek tarczy we współrzędnych sceny)."""
+    from PySide6.QtCore import QPointF
+
+    def items(item):
+        for child in item.childItems():
+            yield child
+            yield from items(child)
+
+    for it in items(desk.rootObject()):
+        if it.property("dial") is None or it.property("param") is None or not it.isVisible():
+            continue
+        yield it.property("param").property("key"), it.mapToScene(QPointF(it.width() / 2, it.property("dial") / 2))
+
+
 def _settle(app, n=12):
     from PySide6.QtTest import QTest
 
